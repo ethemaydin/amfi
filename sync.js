@@ -2,7 +2,7 @@
 // Akış: yorum + DM oku -> takip doğrula (is_user_follow_business) -> masa ata -> İncir çekilişi -> data.json
 const fs = require("fs");
 const E = process.env;
-const API = `https://graph.instagram.com/${E.API_VERSION || "v25.0"}`;
+const VER = E.API_VERSION || "v25.0";
 const TOTAL = +E.TOTAL || 50000, STEP = +E.STEP || 10000;
 const SALT = E.SALT || "english-base-amfi-2026";
 const REQUIRE_COMMENT = E.REQUIRE_COMMENT !== "0";
@@ -10,8 +10,14 @@ const MAX_CALLS = +E.MAX_CALLS || 400, RECHECK = +E.RECHECK || 40;
 const DIR = E.DATA_DIR || ".";
 const NAME_OK = /^[A-Za-z0-9._]{1,30}$/;
 const WANT = /masa\s*#?\s*(\d{1,5})/i, DEL = /kald[ıi]r|\bsil\b/i, JOIN = /kat[ıi]l/i;
-let token = E.IG_TOKEN, calls = 0;
+
+let token = (E.IG_TOKEN || "").trim(), calls = 0;
 if (!token) throw new Error("IG_TOKEN gerekli");
+
+// EAA... token'lar graph.facebook.com, IG... token'lar graph.instagram.com kullanır
+const isFbToken = token.startsWith("EAA");
+const API = isFbToken ? `https://graph.facebook.com/${VER}` : `https://graph.instagram.com/${VER}`;
+const IG_ID = (E.IG_ACCOUNT_ID || "17841476270184825").trim();
 
 async function api(path, params = {}, soft = false) {
   const u = new URL(path.startsWith("http") ? path : API + path);
@@ -38,13 +44,18 @@ const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); f
   const banned = new Set(fs.existsSync("banned.txt") ? fs.readFileSync("banned.txt", "utf8").split(/\s+/).map((s) => s.replace(/^@/, "").toLowerCase()).filter(Boolean) : []);
   const now = Date.now();
 
-  // token yenile (60 günlük; 30 günde bir)
-  if (S.token) token = S.token;
-  if (!S.tokenAt || now - S.tokenAt > 30 * 864e5) {
-    const r = await api("https://graph.instagram.com/refresh_access_token", { grant_type: "ig_refresh_token" }, true);
-    if (r && r.access_token) { token = r.access_token; S.token = token; S.tokenAt = now; }
+  // Sadece IG... (60 günlük) token ise yenile; EAA... (SUAT) süresizdir
+  if (!isFbToken) {
+    if (S.token) token = S.token;
+    if (!S.tokenAt || now - S.tokenAt > 30 * 864e5) {
+      const r = await api("https://graph.instagram.com/refresh_access_token", { grant_type: "ig_refresh_token" }, true);
+      if (r && r.access_token) { token = r.access_token; S.token = token; S.tokenAt = now; }
+    }
   }
-  const me = await api("/me", { fields: "user_id,username,followers_count" });
+
+  const target = isFbToken ? `/${IG_ID}` : "/me";
+  const meFields = isFbToken ? "id,username,followers_count" : "user_id,username,followers_count";
+  const me = await api(target, { fields: meFields });
   const selfId = String(me.user_id || me.id);
 
   const rec = (name) => {
@@ -55,7 +66,7 @@ const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); f
 
   // 1) yorumlar (yeniden eskiye)
   let media = (E.MEDIA_IDS || "").split(",").filter(Boolean);
-  if (!media.length) media = ((await api("/me/media", { fields: "id", limit: 10 })).data || []).map((m) => m.id);
+  if (!media.length) media = ((await api(`${target}/media`, { fields: "id", limit: 10 })).data || []).map((m) => m.id);
   const cIds = new Set(S.cIds || []);
   for (const id of media) {
     let params = { fields: "id,username,text,timestamp", limit: 100 };
@@ -76,7 +87,7 @@ const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); f
   // 2) DM'ler
   let cp = { platform: "instagram", fields: "updated_time,participants,messages.limit(10){message,created_time,from}", limit: 50 };
   for (;;) {
-    const j = await api("/me/conversations", cp, true);
+    const j = await api(`${target}/conversations`, cp, true);
     if (!j) break;
     const page = j.data || [];
     for (const cv of page) {
@@ -161,7 +172,7 @@ const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); f
       if (!elig.length) return null;
       const k = elig[h32(`${SALT}|${m}|${order[m - 1]}|${a}`) % elig.length], f = await follows(users[k]);
       if (f === true) return { m, user: users[k].u, desk: users[k].desk, attempt: a, at: new Date().toISOString() };
-      if (f === false) unseat(k, "unfollowed"); else return null;   // belirsiz: sonraki çalışmada tekrar dene
+      if (f === false) unseat(k, "unfollowed"); else return null;
     }
     return null;
   };
