@@ -1,12 +1,11 @@
-// English Base Amfisi · otomasyon (Node 18+)
-// Akış: yorum + DM oku -> takip doğrula (is_user_follow_business) -> masa ata -> İncir çekilişi -> data.json
+// English Base Amfisi · otomasyon (Sadece Yorum Modu)
+// Akış: yorum oku -> masa ata -> İncir çekilişi -> data.json
 const fs = require("fs");
 const E = process.env;
 const VER = E.API_VERSION || "v25.0";
 const TOTAL = +E.TOTAL || 50000, STEP = +E.STEP || 10000;
 const SALT = E.SALT || "english-base-amfi-2026";
-const REQUIRE_COMMENT = E.REQUIRE_COMMENT !== "0";
-const MAX_CALLS = +E.MAX_CALLS || 400, RECHECK = +E.RECHECK || 40;
+const MAX_CALLS = +E.MAX_CALLS || 400;
 const DIR = E.DATA_DIR || ".";
 const NAME_OK = /^[A-Za-z0-9._]{1,30}$/;
 const WANT = /masa\s*#?\s*(\d{1,5})/i, DEL = /kald[ıi]r|\bsil\b/i, JOIN = /kat[ıi]l/i;
@@ -14,7 +13,6 @@ const WANT = /masa\s*#?\s*(\d{1,5})/i, DEL = /kald[ıi]r|\bsil\b/i, JOIN = /kat[
 let token = (E.IG_TOKEN || "").trim(), calls = 0;
 if (!token) throw new Error("IG_TOKEN gerekli");
 
-// EAA... token'lar graph.facebook.com, IG... token'lar graph.instagram.com kullanır
 const isFbToken = token.startsWith("EAA");
 const API = isFbToken ? `https://graph.facebook.com/${VER}` : `https://graph.instagram.com/${VER}`;
 const IG_ID = (E.IG_ACCOUNT_ID || "17841476270184825").trim();
@@ -38,13 +36,12 @@ const readJson = (f, d) => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "ut
 const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); fs.renameSync(f + ".tmp", f); };
 
 (async () => {
-  const S = readJson(`${DIR}/private.json`, { users: {}, order: [], cSince: 0, cIds: [], mSince: 0, winners: [] });
+  const S = readJson(`${DIR}/private.json`, { users: {}, order: [], cSince: 0, cIds: [], winners: [] });
   const D = readJson(`${DIR}/data.json`, { winners: [] });
   const users = S.users, order = S.order, winners = (S.winners = S.winners || D.winners || []);
   const banned = new Set(fs.existsSync("banned.txt") ? fs.readFileSync("banned.txt", "utf8").split(/\s+/).map((s) => s.replace(/^@/, "").toLowerCase()).filter(Boolean) : []);
   const now = Date.now();
 
-  // Sadece IG... (60 günlük) token ise yenile; EAA... (SUAT) süresizdir
   if (!isFbToken) {
     if (S.token) token = S.token;
     if (!S.tokenAt || now - S.tokenAt > 30 * 864e5) {
@@ -56,15 +53,14 @@ const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); f
   const target = isFbToken ? `/${IG_ID}` : "/me";
   const meFields = isFbToken ? "id,username,followers_count" : "user_id,username,followers_count";
   const me = await api(target, { fields: meFields });
-  const selfId = String(me.user_id || me.id);
 
   const rec = (name) => {
     const k = name.toLowerCase();
-    return users[k] || (users[k] = { u: name, first: now, checked: 0 });
+    return users[k] || (users[k] = { u: name, first: now });
   };
   const events = [];
 
-  // 1) yorumlar (yeniden eskiye)
+  // Yorumları oku
   let media = (E.MEDIA_IDS || "").split(",").filter(Boolean);
   if (!media.length) media = ((await api(`${target}/media`, { fields: "id", limit: 10 })).data || []).map((m) => m.id);
   const cIds = new Set(S.cIds || []);
@@ -76,32 +72,14 @@ const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); f
       const page = j.data || [];
       for (const c of page) {
         const ts = Date.parse(c.timestamp);
-        if (ts > S.cSince || (ts === S.cSince && !cIds.has(c.id))) events.push({ ts, name: c.username || "", text: c.text || "", src: "c", id: c.id });
+        if (ts > S.cSince || (ts === S.cSince && !cIds.has(c.id))) {
+          events.push({ ts, name: c.username || "", text: c.text || "", id: c.id });
+        }
       }
       const after = j.paging && j.paging.next && j.paging.cursors && j.paging.cursors.after;
       if (!after || !page.length || Date.parse(page[page.length - 1].timestamp) < S.cSince) break;
       params = { ...params, after };
     }
-  }
-
-  // 2) DM'ler
-  let cp = { platform: "instagram", fields: "updated_time,participants,messages.limit(10){message,created_time,from}", limit: 50 };
-  for (;;) {
-    const j = await api(`${target}/conversations`, cp, true);
-    if (!j) break;
-    const page = j.data || [];
-    for (const cv of page) {
-      const p = ((cv.participants && cv.participants.data) || []).find((x) => String(x.id) !== selfId);
-      if (!p) continue;
-      for (const m of (cv.messages && cv.messages.data) || []) {
-        const ts = Date.parse(m.created_time);
-        if (m.from && String(m.from.id) === String(p.id) && ts > S.mSince) events.push({ ts, name: p.username || "", text: m.message || "", src: "d", igsid: String(p.id) });
-      }
-    }
-    const after = j.paging && j.paging.next && j.paging.cursors && j.paging.cursors.after;
-    const lastUp = page.length && Date.parse(page[page.length - 1].updated_time);
-    if (!after || !page.length || lastUp <= S.mSince) break;
-    cp = { ...cp, after };
   }
 
   events.sort((a, b) => a.ts - b.ts || String(a.id).localeCompare(String(b.id)));
@@ -112,79 +90,68 @@ const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); f
   const unseat = (k, why) => {
     const r = users[k]; if (!r || !r.member) return;
     delete seats[r.desk]; free = Math.min(free, r.desk);
-    r.member = false; r.d = false; if (why) r[why] = true;
+    r.member = false; if (why) r[why] = true;
     const i = order.indexOf(k); if (i >= 0) order.splice(i, 1);
   };
 
   for (const ev of events) {
     if (!NAME_OK.test(ev.name) || banned.has(ev.name.toLowerCase())) continue;
     const r = rec(ev.name), k = ev.name.toLowerCase();
-    if (ev.src === "c") r.c = true; else { r.d = true; r.igsid = ev.igsid; }
+    r.c = true;
     const w = WANT.exec(ev.text);
-    if (DEL.test(ev.text)) { if (!isWinner(k)) { unseat(k); r.removed = true; r.c = r.d = false; } continue; }
-    if (r.removed) { if (JOIN.test(ev.text) && ev.src === "d") r.removed = false; else continue; }
-    r.fresh = true;
+    if (DEL.test(ev.text)) { if (!isWinner(k)) { unseat(k); r.removed = true; r.c = false; } continue; }
+    if (r.removed) { if (JOIN.test(ev.text)) r.removed = false; else continue; }
     if (w && +w[1] >= 1 && +w[1] <= TOTAL) r.want = +w[1];
   }
-  const maxC = events.filter((e) => e.src === "c").reduce((a, e) => Math.max(a, e.ts), S.cSince);
-  S.cIds = [...new Set([...(maxC === S.cSince ? S.cIds || [] : []), ...events.filter((e) => e.src === "c" && e.ts === maxC).map((e) => e.id)])];
+
+  const maxC = events.reduce((a, e) => Math.max(a, e.ts), S.cSince);
+  S.cIds = [...new Set([...(maxC === S.cSince ? S.cIds || [] : []), ...events.filter((e) => e.ts === maxC).map((e) => e.id)])];
   S.cSince = maxC;
-  S.mSince = events.filter((e) => e.src === "d").reduce((a, e) => Math.max(a, e.ts), S.mSince);
 
-  const follows = async (r) => {
-    if (!r.igsid || calls >= MAX_CALLS) return null;
-    const j = await api("/" + r.igsid, { fields: "username,is_user_follow_business" }, true);
-    r.checked = Date.now();
-    return j && typeof j.is_user_follow_business === "boolean" ? j.is_user_follow_business : null;
-  };
-  const eligible = (r) => !r.member && !r.removed && r.d && r.igsid && (r.c || !REQUIRE_COMMENT);
-
-  // 3) taşıma istekleri (üyeler)
+  // Taşıma istekleri
   for (const k in users) {
     const r = users[k];
     if (r.member && r.want) {
-      if (r.want !== r.desk && !seats[r.want] && !isWinner(k)) { delete seats[r.desk]; free = Math.min(free, r.desk); r.desk = r.want; seats[r.want] = r.u; }
+      if (r.want !== r.desk && !seats[r.want] && !isWinner(k)) {
+        delete seats[r.desk]; free = Math.min(free, r.desk); r.desk = r.want; seats[r.want] = r.u;
+      }
       r.want = 0;
     }
   }
-  // 4) yeni üyeler: takip doğrulaması
-  const pending = Object.keys(users).filter((k) => eligible(users[k]) && !banned.has(k) && (users[k].fresh || now - users[k].checked > 18e5))
-    .sort((a, b) => users[a].first - users[b].first);
-  for (const k of pending) {
-    const r = users[k], f = await follows(r);
-    r.fresh = false;
-    if (f === true) {
-      const d = r.want && !seats[r.want] ? r.want : nextFree();
-      seats[d] = r.u; r.member = true; r.desk = d; r.want = 0; order.push(k);
-    }
-    if (calls >= MAX_CALLS) break;
-  }
-  // 5) banlılar
-  for (const k of order.slice()) if (banned.has(k) && !isWinner(k)) unseat(k);
-  // 6) takibi bırakanları ele (en eski kontrol edilenlerden RECHECK kadar)
-  const old = order.filter((k) => !isWinner(k)).sort((a, b) => users[a].checked - users[b].checked).slice(0, RECHECK);
-  for (const k of old) { if ((await follows(users[k])) === false) unseat(k, "unfollowed"); if (calls >= MAX_CALLS) break; }
 
-  // 7) İncir çekilişi (kazanan canlı kontrol edilir)
-  const draw = async (m, attempt) => {
+  // Yeni üyeleri doğrudan masaya oturt (yorum yapmış olması yeterli)
+  const pending = Object.keys(users)
+    .filter((k) => !users[k].member && !users[k].removed && users[k].c && !banned.has(k))
+    .sort((a, b) => users[a].first - users[b].first);
+
+  for (const k of pending) {
+    const r = users[k];
+    const d = r.want && !seats[r.want] ? r.want : nextFree();
+    seats[d] = r.u; r.member = true; r.desk = d; r.want = 0; order.push(k);
+  }
+
+  // Banlılar
+  for (const k of order.slice()) if (banned.has(k) && !isWinner(k)) unseat(k);
+
+  // İncir çekilişi (çekiliş anında kazananı canlı takip edip etmediğini kendin teyit edebilirsin)
+  const draw = (m, attempt) => {
     for (let a = attempt; a < attempt + 50; a++) {
       const elig = order.slice(0, m).filter((k) => !banned.has(k));
       if (!elig.length) return null;
-      const k = elig[h32(`${SALT}|${m}|${order[m - 1]}|${a}`) % elig.length], f = await follows(users[k]);
-      if (f === true) return { m, user: users[k].u, desk: users[k].desk, attempt: a, at: new Date().toISOString() };
-      if (f === false) unseat(k, "unfollowed"); else return null;
+      const k = elig[h32(`${SALT}|${m}|${order[m - 1]}|${a}`) % elig.length];
+      return { m, user: users[k].u, desk: users[k].desk, attempt: a, at: new Date().toISOString() };
     }
     return null;
   };
   for (let i = 0; i < winners.length; i++) if (banned.has(winners[i].user.toLowerCase()) || !users[winners[i].user.toLowerCase()].member) {
-    const w = await draw(winners[i].m, winners[i].attempt + 1); if (w) winners[i] = w;
+    const w = draw(winners[i].m, winners[i].attempt + 1); if (w) winners[i] = w;
   }
-  for (let m = STEP; m <= TOTAL; m += STEP) if (order.length >= m && !winners.some((w) => w.m === m)) { const w = await draw(m, 0); if (w) winners.push(w); }
+  for (let m = STEP; m <= TOTAL; m += STEP) if (order.length >= m && !winners.some((w) => w.m === m)) { const w = draw(m, 0); if (w) winners.push(w); }
   winners.sort((a, b) => a.m - b.m);
 
   const pub = { seats: {}, winners, followers: me.followers_count || 0, total: TOTAL, step: STEP, updated: new Date().toISOString() };
   for (const d in seats) pub.seats[d] = seats[d];
   writeJson(`${DIR}/data.json`, pub);
   writeJson(`${DIR}/private.json`, S);
-  console.log(`${events.length} olay, ${order.length} üye, ${winners.length} kazanan, ${calls} API çağrısı`);
+  console.log(`${events.length} yorum olayı, ${order.length} üye, ${winners.length} kazanan, ${calls} API çağrısı`);
 })().catch((e) => { console.error("HATA:", e.message); process.exit(1); });
