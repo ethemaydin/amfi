@@ -53,12 +53,15 @@ jobs:
         run: |
           set -uo pipefail
           ok=0
-          for host in $HOSTS; do
+          for host in ${HOSTS:-}; do
+            echo "Host: $host -> $(getent ahostsv4 "$host" | awk '{print $1}' | sort -u | tr '\n' ' ')"
             for sch in "$SCHEME" ftp; do
-              if curl -sS $CURL $OPTS -u "$AUTH" --list-only "$sch://$host/" > /dev/null 2>&1; then
-                FTPV="$sch://$host"
-                echo "FTP=$FTPV" >> "$GITHUB_ENV"; ok=1; break 2
+              rc=0
+              err=$(curl -sS --connect-timeout 15 --max-time 40 $OPTS --list-only -u "$AUTH" "$sch://$host/" 2>&1 >/dev/null) || rc=$?
+              if [ $rc -eq 0 ]; then
+                FTPV="$sch://$host"; echo "FTP=$FTPV" >> "$GITHUB_ENV"; ok=1; break 2
               fi
+              echo "  $sch://$host -> curl kodu $rc ${err:+| $err}"
             done
           done
           if [ "$ok" != 1 ]; then
