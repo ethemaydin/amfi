@@ -8,50 +8,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      RAW_SCHEME: ${{ secrets.FTP_SCHEME }}
-      RAW_HOST: ${{ secrets.FTP_HOST }}
-      RAW_USER: ${{ secrets.FTP_USER }}
-      RAW_PASS: ${{ secrets.FTP_PASS }}
-      RAW_WEB: ${{ secrets.FTP_WEB_DIR }}
-      RAW_PRIV: ${{ secrets.FTP_PRIVATE_DIR }}
+      FTP: ${{ secrets.FTP_SCHEME || 'ftp' }}://${{ secrets.FTP_HOST }}
+      AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
       OPTS: ${{ secrets.FTP_CURL_OPTS }}
+      WEB: ${{ secrets.FTP_WEB_DIR }}
+      PRIV: ${{ secrets.FTP_PRIVATE_DIR }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-
-      - name: Adresleri temizle
-        run: |
-          # bosluk ve satir sonlarini sil (secret yapistirirken sik olur)
-          c() { printf '%s' "$1" | tr -d '[:space:]'; }
-          SCHEME="$(c "$RAW_SCHEME")"
-          [ -n "$SCHEME" ] || SCHEME=ftp
-          HOST="$(c "$RAW_HOST")"
-          HOST="${HOST#*://}"      # basinda ftp:// varsa at
-          HOST="${HOST%/}"         # sonunda / varsa at
-          WEB="$(c "$RAW_WEB")"
-          PRIV="$(c "$RAW_PRIV")"
-          case "$WEB"  in /*) ;; *) WEB="/$WEB"  ;; esac
-          case "$PRIV" in /*) ;; *) PRIV="/$PRIV" ;; esac
-          WEB="${WEB%/}"
-          PRIV="${PRIV%/}"
-          USER_C="$(printf '%s' "$RAW_USER" | tr -d '\r\n')"
-          PASS_C="$(printf '%s' "$RAW_PASS" | tr -d '\r\n')"
-          {
-            echo "PRIV_URL=${SCHEME}://${HOST}${PRIV}/private.json"
-            echo "DATA_URL=${SCHEME}://${HOST}${WEB}/data.json"
-            echo "AUTH_C=${USER_C}:${PASS_C}"
-          } >> "$GITHUB_ENV"
-          # sadece yapi kontrolu, gizli bilgi yazdirmaz
-          echo "scheme=$SCHEME host_len=${#HOST} web=$WEB priv=$PRIV"
-
       - name: Durumu sunucudan indir
         run: |
-          curl -sS $OPTS -u "$AUTH_C" --url "$PRIV_URL" -o private.json || echo "private.json indirilemedi (ilk calisma olabilir)"
-          curl -sS $OPTS -u "$AUTH_C" --url "$DATA_URL" -o data.json || echo "data.json indirilemedi (ilk calisma olabilir)"
+          curl -sS $OPTS -u "$AUTH" "$FTP$PRIV/private.json" -o private.json || true
+          curl -sS $OPTS -u "$AUTH" "$FTP$WEB/data.json" -o data.json || true
           [ -s private.json ] || rm -f private.json
           [ -s data.json ] || rm -f data.json
-
       - name: Senkronize et
         run: node sync.js
         env:
@@ -61,8 +32,7 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           COMMENT_KEYWORD: ${{ secrets.COMMENT_KEYWORD }}
           SALT: ${{ secrets.SALT }}
-
       - name: Sunucuya yükle
         run: |
-          curl -sS $OPTS -u "$AUTH_C" --ftp-create-dirs -T private.json --url "$PRIV_URL"
-          curl -sS $OPTS -u "$AUTH_C" -T data.json --url "$DATA_URL"
+          curl -sS $OPTS -u "$AUTH" --ftp-create-dirs -T private.json "$FTP$PRIV/private.json"
+          curl -sS $OPTS -u "$AUTH" -T data.json "$FTP$WEB/data.json"
