@@ -84,13 +84,13 @@ jobs:
           printf 'Require all denied\nOptions -Indexes\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n' > .htaccess-priv
           curl -sS $CURL $OPTS -u "$AUTH" -T .htaccess-priv "$FTP$PRIV/.htaccess" > /dev/null 2>&1 || true
       - name: Durumu eski data branch'ten taşı (tek seferlik)
-        if: ${{ secrets.STATE_KEY != '' }}
         env:
           AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
           GH_TOKEN: ${{ github.token }}
           STATE_KEY: ${{ secrets.STATE_KEY }}
         run: |
           set -uo pipefail
+          if [ -z "${STATE_KEY:-}" ]; then echo "STATE_KEY secret yok; taşıma adımı atlandı."; exit 0; fi
           if curl -sS $CURL $OPTS -u "$AUTH" --head "$FTP$PRIV/private.json" > /dev/null 2>&1; then
             echo "Sunucuda private.json var, taşıma atlandı."
             exit 0
