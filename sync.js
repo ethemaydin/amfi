@@ -23,8 +23,8 @@ const AUTO = E.AUTO_DM !== "0" && !CSV;
 const MAX_CALLS = +E.MAX_CALLS || 150, RECHECK = +E.RECHECK || 12, MAX_SEND = +E.MAX_SEND || 60;
 const MAX_CONV_PAGES = +E.MAX_CONV_PAGES || 3;         // konuşma listesinde en fazla sayfa
 const CONV_LIMIT = +E.CONV_LIMIT || 25;
-const MAX_PENDING = +E.MAX_PENDING || 8;               // koşu başına en fazla takip kontrolü
-const RL_COOLDOWN = (+E.RL_COOLDOWN || 10) * 60000;    // hız limiti sonrası bekleme
+const MAX_PENDING = +E.MAX_PENDING || 5;               // koşu başına en fazla takip kontrolü
+const RL_COOLDOWN = (+E.RL_COOLDOWN || 30) * 60000;   // hız limiti sonrası bekleme (dk)
 const WARN_CD = (E.WARN_CD === undefined || E.WARN_CD === "" ? 360 : +E.WARN_CD) * 60000;   // uyarı tekrar aralığı (dk)
 const DIR = E.DATA_DIR || ".";
 const NAME_OK = /^[A-Za-z0-9._]{1,30}$/;
