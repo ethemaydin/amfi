@@ -6,7 +6,7 @@ const fs = require("fs"), path = require("path"), os = require("os");
 const MOCK = path.join(__dirname, "test", "mock.js");
 const SYNC = path.join(__dirname, "sync.js");
 let fails = 0;
-const ok = (c, m) => { console.log((c ? "  \u2705 " : "  \u274c ") + m); if (!c) fails++; };
+const ok = (c, m) => { console.log((c ? "  PASS " : "  FAIL ") + m); if (!c) fails++; };
 const tmp = (tag) => fs.mkdtempSync(path.join(os.tmpdir(), "amfi-" + tag + "-"));
 const iso = (msAgo) => new Date(Date.now() - msAgo).toISOString();
 const cv = (id, user, igsid, text, msAgo) => ({
@@ -19,7 +19,7 @@ const cv = (id, user, igsid, text, msAgo) => ({
 function run(dir, extra = {}) {
   const env = {
     IG_TOKEN: "EAA" + "x".repeat(100), SALT: "test-salt", TOTAL: "50000", STEP: "10000",
-    REQUIRE_COMMENT: "0", MAX_SEND: "50", MAX_CALLS: "100",
+    REQUIRE_COMMENT: "0", MAX_SEND: "50", MAX_CALLS: "100", RECHECK_EVERY: "0", CALLS_HOUR: "500",
     MOCK_LOG: path.join(dir, "postlog.jsonl"), ...extra
   };
   const r = spawnSync(process.execPath, ["--require", MOCK, SYNC], { cwd: dir, env: { ...process.env, ...env }, encoding: "utf8" });

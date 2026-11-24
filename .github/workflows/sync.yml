@@ -50,9 +50,13 @@ jobs:
           AUTO_DM: ${{ secrets.AUTO_DM || '1' }}
           MAX_SEND: ${{ secrets.MAX_SEND || '60' }}
           MAX_CALLS: ${{ secrets.MAX_CALLS || '150' }}
-          RECHECK: ${{ secrets.RECHECK || '12' }}
-          MAX_CONV_PAGES: ${{ secrets.MAX_CONV_PAGES || '3' }}
+          RECHECK: ${{ secrets.RECHECK || '3' }}
+          MAX_CONV_PAGES: ${{ secrets.MAX_CONV_PAGES || '1' }}
           CONV_LIMIT: ${{ secrets.CONV_LIMIT || '25' }}
+          MEDIA_LIMIT: ${{ secrets.MEDIA_LIMIT || '3' }}
+          MAX_PENDING: ${{ secrets.MAX_PENDING || '3' }}
+          CALLS_HOUR: ${{ secrets.CALLS_HOUR || '120' }}
+          RL_COOLDOWN: ${{ secrets.RL_COOLDOWN || '10' }}
           LOG_EVENTS: ${{ secrets.LOG_EVENTS || '1' }}
           WARN_CD: ${{ secrets.WARN_CD || '360' }}
           MSG_ASK: ${{ secrets.MSG_ASK }}

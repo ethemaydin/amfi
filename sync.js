@@ -20,11 +20,14 @@ if (E.COMMENT_KEYWORD) {
 }
 if (keyErr) console.error("UYARI: COMMENT_KEYWORD geçersiz regex, tüm yorumlar sayılacak:", keyErr);
 const AUTO = E.AUTO_DM !== "0" && !CSV;
-const MAX_CALLS = +E.MAX_CALLS || 150, RECHECK = +E.RECHECK || 12, MAX_SEND = +E.MAX_SEND || 60;
-const MAX_CONV_PAGES = +E.MAX_CONV_PAGES || 3;         // konuşma listesinde en fazla sayfa
+const MAX_CALLS = +E.MAX_CALLS || 150, RECHECK = +E.RECHECK || 3, MAX_SEND = +E.MAX_SEND || 60;
+const MAX_CONV_PAGES = +E.MAX_CONV_PAGES || 1;         // konuşma listesinde en fazla sayfa
 const CONV_LIMIT = +E.CONV_LIMIT || 25;
-const MAX_PENDING = +E.MAX_PENDING || 5;               // koşu başına en fazla takip kontrolü
-const RL_COOLDOWN = (+E.RL_COOLDOWN || 30) * 60000;   // hız limiti sonrası bekleme (dk)
+const MAX_PENDING = +E.MAX_PENDING || 3;               // koşu başına en fazla takip kontrolü
+const RL_COOLDOWN = (E.RL_COOLDOWN === undefined || E.RL_COOLDOWN === "" ? 10 : +E.RL_COOLDOWN) * 60000;
+const CALLS_HOUR = +E.CALLS_HOUR || 120;               // saatlik API çağrı tavanı
+const RECHECK_EVERY = (E.RECHECK_EVERY === undefined || E.RECHECK_EVERY === "" ? 30 : +E.RECHECK_EVERY) * 60000; // "takibi bırakan" taraması aralığı
+const MEDIA_LIMIT = +E.MEDIA_LIMIT || 3;                // son kaç gönderinin yorumları okunur
 const WARN_CD = (E.WARN_CD === undefined || E.WARN_CD === "" ? 360 : +E.WARN_CD) * 60000;   // uyarı tekrar aralığı (dk)
 const DIR = E.DATA_DIR || ".";
 const NAME_OK = /^[A-Za-z0-9._]{1,30}$/;
@@ -45,18 +48,19 @@ const RATE_RX = /limit reached|rate limit|too many|Please reduce/i;
 
 async function api(path, params = {}, soft = false) {
   if (RL.hit) { if (soft) return null; throw new RLError(RL.msg); }
+  if (overBudget()) { rlTripped(`saatlik çağrı bütçesi doldu (${CALLS_HOUR})`, path); if (soft) return null; throw new RLError(RL.msg); }
   const u = new URL(path.startsWith("http") ? path : BASE + path);
   Object.entries({ ...params, access_token: token }).forEach(([k, v]) => u.searchParams.set(k, v));
   let last = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    calls++;
+    calls++; CALLT.push(Date.now());
     try {
       const r = await fetch(u);
       const j = await r.json();
       if (j.error) {
         const msg = j.error.message || "";
         if (r.status === 429 || j.error.code === 4 || RATE_RX.test(msg)) {
-          rlTripped(`${msg} (kod ${j.error.code || "?"})`);
+          rlTripped(`${msg} (kod ${j.error.code || "?"})`, path);
           if (soft) { if (E.VERBOSE) console.error("API hız limiti:", path, msg); return null; }
           throw new RLError(RL.msg);
         }
@@ -79,20 +83,27 @@ async function api(path, params = {}, soft = false) {
 const postErrs = new Set();
 let lastPostErr = "";
 class RLError extends Error {}                       // API hız limiti: koşuyu sessizce değil, kontrollü bitir
-const RL = { hit: false, msg: "" };
-const rlTripped = (m) => { if (!RL.hit) { RL.hit = true; RL.msg = m || "rate limit"; } return true; };
+const RL = { hit: false, msg: "", path: "" };
+const rlTripped = (m, path) => {
+  if (!RL.hit) { RL.hit = true; RL.msg = m || "rate limit"; RL.path = path || ""; console.error(`HIZ LİMİTİ: ${RL.path} -> ${RL.msg}`); }
+  return true;
+};
+let CALLT = [];                                      // son 60 dk içindeki API çağrı zamanları
 let FLUSH = null;                                    // hız limitinde kısmi durumu kaydetmek için
+const pruneCalls = () => { const cut = Date.now() - 3600000; if (CALLT.length) CALLT = CALLT.filter((t) => t > cut); };
+const overBudget = () => { pruneCalls(); return CALLT.length >= CALLS_HOUR; };
 async function post(path, body) {
   if (RL.hit) return null;
+  if (overBudget()) { rlTripped(`saatlik çağrı bütçesi doldu (${CALLS_HOUR})`, path); return null; }
   for (let attempt = 0; attempt < 2; attempt++) {
-    calls++;
+    calls++; CALLT.push(Date.now());
     try {
       const r = await fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) });
       const j = await r.json();
       if (j.error) {
         const m = `${j.error.message || "?"} (kod ${j.error.code || "?"}${j.error.error_subcode ? "/" + j.error.error_subcode : ""})`;
         if (r.status === 429 || j.error.code === 4 || RATE_RX.test(j.error.message || "")) {
-          rlTripped(m);
+          rlTripped(m, path);
           if (postErrs.size < 5 && !postErrs.has(m)) { postErrs.add(m); console.error("GÖNDERİM HATASI:", path, "->", m); }
           return null;
         }
@@ -123,6 +134,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   }
   const f = "id,name,instagram_business_account{id,username,followers_count}";
   let pg = await api("/me", { fields: f }, true);
+  if (!pg && RL.hit) throw new RLError(RL.msg);        // kota yoklaması: tek çağrıyla anla, boşuna devam etme
   if (!pg || !pg.instagram_business_account) {
     const acc = await api("/me/accounts", { fields: f + ",access_token" });
     pg = (acc.data || []).find((x) => x.instagram_business_account && (!IG_ID || x.instagram_business_account.id === IG_ID) && (!PAGE_ID || x.id === PAGE_ID));
@@ -137,6 +149,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   const S = readJson(`${DIR}/private.json`, { users: {}, order: [], cSince: 0, cIds: [], mSince: 0, winners: [] });
   const D = readJson(`${DIR}/data.json`, { winners: [] });
   const users = S.users, order = S.order, winners = (S.winners = S.winners || D.winners || []);
+  CALLT = (S.cl || []).filter((t) => Date.now() - t < 3600000);   // saatlik bütçe geçmişi
   const banned = new Set(fs.existsSync("banned.txt") ? fs.readFileSync("banned.txt", "utf8").split(/\s+/).map((s) => s.replace(/^@/, "").toLowerCase()).filter(Boolean) : []);
   const now = Date.now();
 
@@ -185,7 +198,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
 
   // 1) yorumlar (yeniden eskiye)
   let media = CSV ? [] : (E.MEDIA_IDS || "").split(",").filter(Boolean);
-  if (!media.length && !CSV) media = ((await api(`/${IG_ID}/media`, { fields: "id", limit: 10 })).data || []).map((m) => m.id);
+  if (!media.length && !CSV) media = ((await api(`/${IG_ID}/media`, { fields: "id", limit: MEDIA_LIMIT })).data || []).slice(0, MEDIA_LIMIT).map((m) => m.id);
   const cIds = new Set(S.cIds || []);
   for (const id of media) {
     let params = { fields: "id,username,text,timestamp", limit: 100 };
@@ -322,8 +335,9 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   if (RL.hit) S.rlUntil = Date.now() + RL_COOLDOWN;      // sonraki koşu boşuna API yakmasın
   // 6) banlılar
   for (const k of order.slice()) if (banned.has(k) && !isWinner(k)) unseat(k);
-  // 7) takibi bırakanları ele
-  if (!RL.hit) {
+  // 7) takibi bırakanları ele (yalnızca belirli aralıkla)
+  if (!RL.hit && (!S.lastRecheck || now - S.lastRecheck > RECHECK_EVERY)) {
+    S.lastRecheck = now;
     const old = order.filter((k) => !isWinner(k)).sort((a, b) => users[a].checked - users[b].checked).slice(0, RECHECK);
     for (const k of old) {
       const f = await follows(users[k]);
@@ -370,6 +384,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     const pub = { seats: {}, winners, followers: me.followers_count || 0, total: TOTAL, step: STEP, updated: new Date().toISOString() };
     for (const d in seats) pub.seats[d] = seats[d];
     if (D && D.seats && D.updated && strip(D) === strip(pub)) pub.updated = D.updated;   // değişiklik yoksa zaman damgasını koru
+    S.cl = CALLT.slice(-300);
     writeJson(`${DIR}/data.json`, pub);
     writeJson(`${DIR}/private.json`, S);
   };
