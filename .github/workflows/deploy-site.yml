@@ -49,6 +49,6 @@ jobs:
           set -uo pipefail
           CURL="--connect-timeout 25 --max-time 120 --ftp-skip-pasv-ip --no-progress-meter"
           echo "Sunucudaki index.html (ilk 160 bayt):"
-          curl -sS $CURL -u "$AUTH" "$FTP$WEB/index.html" | head -c 160; echo
-          echo "Canlı sayfada GitHub veri kaynağı var mı:"
+          curl -sS $CURL -u "$AUTH" -r 0-159 "$FTP$WEB/index.html" || true; echo
+          echo "Canlı sayfada GitHub veri kaynağı var mı (1 = evet):"
           curl -sS --max-time 25 "https://amfi.englishbase.com.tr/?t=$GITHUB_RUN_ID" | grep -c 'raw.githubusercontent' || echo "0 (CDN önbelleği olabilir)"
