@@ -23,6 +23,8 @@ const AUTO = E.AUTO_DM !== "0" && !CSV;
 const MAX_CALLS = +E.MAX_CALLS || 150, RECHECK = +E.RECHECK || 12, MAX_SEND = +E.MAX_SEND || 60;
 const MAX_CONV_PAGES = +E.MAX_CONV_PAGES || 3;         // konuşma listesinde en fazla sayfa
 const CONV_LIMIT = +E.CONV_LIMIT || 25;
+const MAX_PENDING = +E.MAX_PENDING || 8;               // koşu başına en fazla takip kontrolü
+const RL_COOLDOWN = (+E.RL_COOLDOWN || 10) * 60000;    // hız limiti sonrası bekleme
 const WARN_CD = (E.WARN_CD === undefined || E.WARN_CD === "" ? 360 : +E.WARN_CD) * 60000;   // uyarı tekrar aralığı (dk)
 const DIR = E.DATA_DIR || ".";
 const NAME_OK = /^[A-Za-z0-9._]{1,30}$/;
@@ -138,6 +140,10 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   const banned = new Set(fs.existsSync("banned.txt") ? fs.readFileSync("banned.txt", "utf8").split(/\s+/).map((s) => s.replace(/^@/, "").toLowerCase()).filter(Boolean) : []);
   const now = Date.now();
 
+  if (S.rlUntil && Date.now() < S.rlUntil) {                 // hız limiti bekleme süresi
+    console.log(`Hız limiti beklemede: ${new Date(S.rlUntil).toISOString()} — bu koşu atlandı.`);
+    process.exit(0);
+  }
   if (!FB && token && S.token) token = S.token;
   if (!FB && token && (!S.tokenAt || now - S.tokenAt > 30 * 864e5)) {      // Instagram girişli token 60 gün; 30 günde bir yenile
     const r = await api("https://graph.instagram.com/refresh_access_token", { grant_type: "ig_refresh_token" }, true);
@@ -295,15 +301,17 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   }
   // 5) yeni üyeler: takip doğrulaması
   const pending = Object.keys(users).filter((k) => eligible(users[k]) && !banned.has(k) && (users[k].fresh || now >= (users[k].nextAt || 0)))
-    .sort((a, b) => users[a].first - users[b].first);
+    .sort((a, b) => (users[b].fresh ? 1 : 0) - (users[a].fresh ? 1 : 0) || (users[b].want ? 1 : 0) - (users[a].want ? 1 : 0) || users[a].first - users[b].first)
+    .slice(0, MAX_PENDING);
   for (const k of pending) {
     const r = users[k], f = await follows(r);
-    if (f === null) r.nextAt = Date.now() + 15 * 60000;                        // doğrulanamadı: 15 dk sonra
+    if (f === null) { r.nextAt = Date.now() + 30 * 60000; if (RL.hit) { console.log("hız limiti: kalan kontroller sonraki koşuya bırakıldı"); break; } }
     else { r.fresh = false; r.nextAt = Date.now() + 6 * 36e5; }                // kesin sonuç: 6 saat sonra
     if (E.LOG_EVENTS !== "0") console.log(`kontrol @${r.u} · takip=${f} · üye=${!!r.member} · çağrı=${calls}`);
     if (f === true) {
       const d = r.want && !seats[r.want] ? r.want : nextFree();
       seats[d] = r.u; r.member = true; r.desk = d; r.want = 0; order.push(k);
+      if (E.LOG_EVENTS !== "0") console.log(`masa verildi @${r.u} -> ${d}`);
       if (AUTO && r.igsid !== "csv") {
         if (canDm(r)) { if (await dm({ id: r.igsid }, T_OK(d))) r.ok = true; }
         else if (canReply(r)) { if (await dm({ comment_id: r.cid }, T_OK(d))) r.ok = true; }   // pencere kapalı: yoruma özel yanıt
@@ -311,14 +319,22 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     } else if (f === false && AUTO && canDm(r) && now - (r.warn || 0) > WARN_CD) { r.warn = now; await dm({ id: r.igsid }, T_NO, T_BTN); }
     if (calls >= MAX_CALLS) break;
   }
+  if (RL.hit) S.rlUntil = Date.now() + RL_COOLDOWN;      // sonraki koşu boşuna API yakmasın
   // 6) banlılar
   for (const k of order.slice()) if (banned.has(k) && !isWinner(k)) unseat(k);
   // 7) takibi bırakanları ele
-  const old = order.filter((k) => !isWinner(k)).sort((a, b) => users[a].checked - users[b].checked).slice(0, RECHECK);
-  for (const k of old) { const f = await follows(users[k]); users[k].nextAt = Date.now() + 6 * 36e5; if (f === false) unseat(k, "unfollowed"); if (calls >= MAX_CALLS) break; }
+  if (!RL.hit) {
+    const old = order.filter((k) => !isWinner(k)).sort((a, b) => users[a].checked - users[b].checked).slice(0, RECHECK);
+    for (const k of old) {
+      const f = await follows(users[k]);
+      users[k].nextAt = Date.now() + (f === null ? 15 : 360) * 60000;
+      if (f === false) unseat(k, "unfollowed");
+      if (calls >= MAX_CALLS || RL.hit) break;
+    }
+  }
 
   // 7b) masası atanmış ama onay DM'i ulaşmamış üyelere tekrar gönder
-  if (AUTO) {
+  if (AUTO && !RL.hit) {
     for (const k of order.slice()) {
       const r = users[k];
       if (r.ok || r.igsid === "csv") continue;
