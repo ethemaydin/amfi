@@ -8,16 +8,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      FTP: ${{ secrets.FTP_SCHEME || 'ftp' }}://${{ secrets.FTP_HOST }}
+      SCHEME: ${{ secrets.FTP_SCHEME || 'ftp' }}
+      HOSTRAW: ${{ secrets.FTP_HOST }}
       AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
       OPTS: ${{ secrets.FTP_CURL_OPTS }}
-      WEB: ${{ secrets.FTP_WEB_DIR }}
-      PRIV: ${{ secrets.FTP_PRIVATE_DIR }}
+      WEBRAW: ${{ secrets.FTP_WEB_DIR }}
+      PRIVRAW: ${{ secrets.FTP_PRIVATE_DIR }}
       CURL: --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
+      - name: Bağlantı ayarlarını düzenle
+        run: |
+          h="${HOSTRAW#*://}"; h="${h%%/*}"; h="${h//[[:space:]]/}"
+          w="${WEBRAW//[[:space:]]/}"; p="${PRIVRAW//[[:space:]]/}"
+          w="/${w#/}"; w="${w%/}"; p="/${p#/}"; p="${p%/}"
+          [ -n "$h" ] || { echo "FTP_HOST boş"; exit 1; }
+          echo "FTP=$SCHEME://$h" >> "$GITHUB_ENV"
+          echo "WEB=$w" >> "$GITHUB_ENV"
+          echo "PRIV=$p" >> "$GITHUB_ENV"
       - name: Durumu sunucudan indir
         run: |
           get() {
