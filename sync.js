@@ -153,7 +153,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   const banned = new Set(fs.existsSync("banned.txt") ? fs.readFileSync("banned.txt", "utf8").split(/\s+/).map((s) => s.replace(/^@/, "").toLowerCase()).filter(Boolean) : []);
   const now = Date.now();
 
-  if (S.rlUntil && Date.now() < S.rlUntil) {                 // hız limiti bekleme süresi
+  if (!E.IGNORE_COOLDOWN && S.rlUntil && Date.now() < S.rlUntil) {   // hız limiti bekleme süresi
     console.log(`Hız limiti beklemede: ${new Date(S.rlUntil).toISOString()} — bu koşu atlandı.`);
     process.exit(0);
   }

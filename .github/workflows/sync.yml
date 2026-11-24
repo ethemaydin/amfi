@@ -57,6 +57,7 @@ jobs:
           MAX_PENDING: ${{ secrets.MAX_PENDING || '3' }}
           CALLS_HOUR: ${{ secrets.CALLS_HOUR || '120' }}
           RL_COOLDOWN: ${{ secrets.RL_COOLDOWN || '10' }}
+          IGNORE_COOLDOWN: ${{ secrets.IGNORE_COOLDOWN }}
           LOG_EVENTS: ${{ secrets.LOG_EVENTS || '1' }}
           WARN_CD: ${{ secrets.WARN_CD || '360' }}
           MSG_ASK: ${{ secrets.MSG_ASK }}
