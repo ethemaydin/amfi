@@ -1,0 +1,12 @@
+name: ping
+# Teşhis: GitHub zamanlanmış işleri bu repoda çalışıyor mu?
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ping $(date -u)"
