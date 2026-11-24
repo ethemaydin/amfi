@@ -1,0 +1,25 @@
+name: ftp-ls
+# Geçici: FTP hesabının görebildiği klasörleri listeler (docroot keşfi). Sonra silinecek.
+on:
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  ls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Klasörleri listele
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
+          HOST: ${{ secrets.FTP_HOST }}
+          SCHEME: ${{ secrets.FTP_SCHEME || 'ftp' }}
+        run: |
+          set -uo pipefail
+          H="${HOST#*://}"; H="${H%%/*}"; H="${H//[[:space:]]/}"
+          echo "host=$H scheme=$SCHEME"
+          echo "=== / ==="
+          curl -sS --connect-timeout 20 --max-time 60 --ftp-skip-pasv-ip -u "$AUTH" --list-only "$SCHEME://$H/" || echo "ROOT_FAIL=$?"
+          for d in public_html public_html/amfi amfi amfi.englishbase.com.tr httpdocs www; do
+            echo "=== /$d ==="
+            curl -sS --connect-timeout 20 --max-time 60 --ftp-skip-pasv-ip -u "$AUTH" --list-only "$SCHEME://$H/$d/" 2>&1 | head -60 || echo "yok ($?)"
+          done
