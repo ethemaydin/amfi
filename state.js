@@ -7,6 +7,7 @@ try {
     const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12), key = crypto.scryptSync(pass, salt, 32);
     const c = crypto.createCipheriv("aes-256-gcm", key, iv);
     const ct = Buffer.concat([c.update(fs.readFileSync("private.json")), c.final()]);
+    fs.mkdirSync("state", { recursive: true });
     fs.writeFileSync("state/private.enc", Buffer.concat([salt, iv, c.getAuthTag(), ct]));
   } else {
     const b = fs.readFileSync("state/private.enc"), key = crypto.scryptSync(pass, b.subarray(0, 16), 32);

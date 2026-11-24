@@ -4,15 +4,21 @@
 const fs = require("fs");
 const E = process.env;
 const clean = (t) => (t || "").trim().replace(/^["']|["']$/g, "").replace(/^Bearer\s+/i, "");
-let token = clean(E.IG_TOKEN), calls = 0, sent = 0;
+let token = clean(E.IG_TOKEN), calls = 0, sent = 0, failedSend = 0;
 const CSV = E.VERIFIED_CSV_URL;                       // ManyChat vb. aracın doldurduğu CSV (isteğe bağlı mod)
 const FB = /^EAA/.test(token) || E.API_MODE === "facebook";
 const BASE = (FB ? "https://graph.facebook.com/" : "https://graph.instagram.com/") + (E.API_VERSION || "v25.0");
 const TOTAL = +E.TOTAL || 50000, STEP = +E.STEP || 10000;
 const SALT = E.SALT || "english-base-amfi-2026";
 const SITE = E.SITE_URL || "https://amfi.englishbase.com.tr";
-const REQUIRE_COMMENT = E.REQUIRE_COMMENT !== "0";
-const KEY = E.COMMENT_KEYWORD ? new RegExp(E.COMMENT_KEYWORD, "i") : null;   // boşsa her yorum sayılır
+const REQUIRE_COMMENT = E.REQUIRE_COMMENT !== "0";   // 0 -> yorum şartı yok: sadece DM + takip
+const DRY = /^(1|true|yes)$/i.test(E.DRY || "");     // 1 -> hiçbir mesaj gönderilmez (test/kuru çalışma)
+let KEY = null, keyErr = "";
+if (E.COMMENT_KEYWORD) {
+  try { KEY = new RegExp(E.COMMENT_KEYWORD, "i"); }
+  catch (e) { keyErr = e.message; }
+}
+if (keyErr) console.error("UYARI: COMMENT_KEYWORD geçersiz regex, tüm yorumlar sayılacak:", keyErr);
 const AUTO = E.AUTO_DM !== "0" && !CSV;
 const MAX_CALLS = +E.MAX_CALLS || 400, RECHECK = +E.RECHECK || 40, MAX_SEND = +E.MAX_SEND || 60;
 const DIR = E.DATA_DIR || ".";
@@ -29,23 +35,54 @@ if (token) {
 }
 const fail = (m) => m + (/access token|OAuth/i.test(m) ? " → IG_TOKEN geçersiz: yeniden üret, boşluk/tırnak olmadan yapıştır." : "");
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const RATE_RX = /limit reached|rate limit|too many|Please reduce/i;
+
 async function api(path, params = {}, soft = false) {
   const u = new URL(path.startsWith("http") ? path : BASE + path);
   Object.entries({ ...params, access_token: token }).forEach(([k, v]) => u.searchParams.set(k, v));
-  calls++;
-  try {
-    const j = await (await fetch(u)).json();
-    if (j.error) throw new Error(fail(j.error.message));
-    return j;
-  } catch (e) { if (!soft) throw e; if (E.VERBOSE) console.error("API uyarı:", path, e.message); return null; }
+  let last = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    calls++;
+    try {
+      const r = await fetch(u);
+      const j = await r.json();
+      if (j.error) {
+        const msg = j.error.message || "";
+        if (attempt === 0 && (r.status === 429 || j.error.code === 4 || RATE_RX.test(msg))) { await sleep(2500); continue; }
+        throw new Error(fail(msg));
+      }
+      return j;
+    } catch (e) {
+      last = e;
+      if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1500); continue; }
+      if (!soft) throw e;
+      if (E.VERBOSE) console.error("API uyarı:", path, e.message);
+      return null;
+    }
+  }
+  if (!soft) throw last || new Error("API çağrısı başarısız: " + path);
+  if (E.VERBOSE) console.error("API uyarı:", path, last && last.message);
+  return null;
 }
 async function post(path, body) {
-  calls++;
-  try {
-    const j = await (await fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) })).json();
-    if (j.error) throw new Error(j.error.message);
-    return j;
-  } catch (e) { if (E.VERBOSE) console.error("Gönderim uyarı:", e.message); return null; }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    calls++;
+    try {
+      const r = await fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (j.error) {
+        if (attempt === 0 && (r.status === 429 || j.error.code === 4 || RATE_RX.test(j.error.message || ""))) { await sleep(3000); continue; }
+        throw new Error(j.error.message);
+      }
+      return j;
+    } catch (e) {
+      if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1500); continue; }
+      if (E.VERBOSE) console.error("Gönderim uyarı:", path, e.message);
+      return null;
+    }
+  }
+  return null;
 }
 function h32(str){let h1=1779033703,h2=3144134277,h3=1013904242,h4=2773480762;for(let i=0,k;i<str.length;i++){k=str.charCodeAt(i);h1=h2^Math.imul(h1^k,597399067);h2=h3^Math.imul(h2^k,2869860233);h3=h4^Math.imul(h3^k,951274213);h4=h1^Math.imul(h4^k,2716044179)}h1=Math.imul(h3^(h1>>>18),597399067);h2=Math.imul(h4^(h2>>>22),2869860233);h3=Math.imul(h1^(h3>>>17),951274213);h4=Math.imul(h2^(h4>>>19),2716044179);return(h1^h2^h3^h4)>>>0}
 const readJson = (f, d) => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : d);
@@ -87,12 +124,24 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
 
   const rec = (name) => { const k = name.toLowerCase(); return users[k] || (users[k] = { u: name, first: now, checked: 0 }); };
   const events = [];
-  const dm = async (recipient, text, btn) => {
-    if (sent >= MAX_SEND || !IG_ID) return false;
-    const message = { text }; if (btn) message.quick_replies = [{ content_type: "text", title: btn, payload: "TAKIP" }];
+  const sendOne = async (recipient, message) => {
+    if (DRY) { console.log(`[DRY] DM -> ${JSON.stringify(recipient)} :: ${(message.text || "").slice(0, 70)}${message.quick_replies ? " [butonlu]" : ""}`); return { dry: true }; }
     let j = await post(`/${IG_ID}/messages`, { recipient, message });
     if (!j && FB && PAGE_ID && PAGE_ID !== IG_ID) j = await post(`/${PAGE_ID}/messages`, { recipient, message });
-    sent++; return !!j;
+    return j;
+  };
+  const dm = async (recipient, text, btn) => {
+    if (sent >= MAX_SEND || !IG_ID) return false;
+    const message = { text };
+    if (btn) message.quick_replies = [{ content_type: "text", title: btn, payload: "TAKIP" }];
+    let j = await sendOne(recipient, message);
+    if (!j && btn) {                       // hızlı yanıt reddedildiyse butonsuz gönder (akış kilitlenmesin)
+      console.error("UYARI: butonlu mesaj gitmedi, butonsuz tekrar deneniyor ->", recipient);
+      delete message.quick_replies;
+      j = await sendOne(recipient, { text });
+    }
+    if (j) sent++; else failedSend++;
+    return !!j;
   };
 
   // 1) yorumlar (yeniden eskiye)
@@ -118,6 +167,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   // 2) DM'ler
   let cp = { platform: "instagram", fields: "updated_time,participants,messages.limit(10){message,created_time,from}", limit: 50 };
   for (;;) {
+    if (calls >= MAX_CALLS) break;                 // API bütçesini takip kontrollerine bırak
     const j = CSV ? null : await api(`/${FB ? PAGE_ID : "me"}/conversations`, cp, true);
     if (!j) break;
     const page = j.data || [];
@@ -208,7 +258,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     .sort((a, b) => users[a].first - users[b].first);
   for (const k of pending) {
     const r = users[k], f = await follows(r);
-    r.fresh = false;
+    if (f !== null) r.fresh = false;               // sonuç kesin değilse sonraki çalışmada yeniden denenir
     if (f === true) {
       const d = r.want && !seats[r.want] ? r.want : nextFree();
       seats[d] = r.u; r.member = true; r.desk = d; r.want = 0; order.push(k);
@@ -229,12 +279,17 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
       if (!elig.length) return null;
       const k = elig[h32(`${SALT}|${m}|${order[m - 1]}|${a}`) % elig.length], f = await follows(users[k]);
       if (f === true) return { m, user: users[k].u, desk: users[k].desk, attempt: a, at: new Date().toISOString() };
-      if (f === false) unseat(k, "unfollowed"); else return null;
+      if (f === false) unseat(k, "unfollowed"); else return undefined;   // undefined = doğrulanamadı, kayıt korunur
     }
-    return null;
+    return null;                                   // 50 denemede uygun kimse yok
   };
-  for (let i = 0; i < winners.length; i++) { const u = users[winners[i].user.toLowerCase()]; if (banned.has(winners[i].user.toLowerCase()) || !u || !u.member) {
-    const w = await draw(winners[i].m, winners[i].attempt + 1); if (w) winners[i] = w; } }
+  for (let i = winners.length - 1; i >= 0; i--) {  // bayat kazananları temizle / yeniden çek
+    const w0 = winners[i], u = users[w0.user.toLowerCase()];
+    if (!banned.has(w0.user.toLowerCase()) && u && u.member) continue;
+    const w = await draw(w0.m, (w0.attempt || 0) + 1);
+    if (w) winners[i] = w;
+    else if (w === null) winners.splice(i, 1);     // yerine kimse bulunamadı: kayıt kaldırılır, sonraki çalışmada tekrar çekilir
+  }
   for (let m = STEP; m <= TOTAL; m += STEP) if (order.length >= m && !winners.some((w) => w.m === m)) { const w = await draw(m, 0); if (w) winners.push(w); }
   winners.sort((a, b) => a.m - b.m);
 
@@ -242,5 +297,5 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   for (const d in seats) pub.seats[d] = seats[d];
   writeJson(`${DIR}/data.json`, pub);
   writeJson(`${DIR}/private.json`, S);
-  console.log(`${events.length} olay, ${order.length} üye, ${winners.length} kazanan, ${sent} mesaj, ${calls} API çağrısı`);
+  console.log(`${events.length} olay, ${order.length} üye, ${winners.length} kazanan, ${sent} mesaj${failedSend ? ` (${failedSend} başarısız)` : ""}, ${calls} API çağrısı${DRY ? " [DRY: mesaj gönderilmedi]" : ""}`);
 })().catch((e) => { console.error("HATA:", e.message); process.exit(1); });

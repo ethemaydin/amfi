@@ -1,79 +1,183 @@
 name: sync
+# Instagram yorum/DM -> takip doğrulama -> masa atama -> data.json (FTP)
 on:
   schedule: [{ cron: "*/10 * * * *" }]
   workflow_dispatch:
+    inputs:
+      dry:
+        description: "Kuru çalışma (DM gönderme)"
+        type: boolean
+        default: false
 concurrency: sync
 permissions: { contents: read }
+env:
+  CURL: >-
+    --connect-timeout 25 --max-time 180 --retry 2 --retry-delay 5
+    --ftp-skip-pasv-ip --no-progress-meter
+  SITE: ${{ secrets.SITE_URL || 'https://amfi.englishbase.com.tr' }}
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      SCHEME: ${{ secrets.FTP_SCHEME || 'ftp' }}
-      HOSTRAW: ${{ secrets.FTP_HOST }}
-      AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
-      OPTS: ${{ secrets.FTP_CURL_OPTS }}
-      WEBRAW: ${{ secrets.FTP_WEB_DIR }}
-      PRIVRAW: ${{ secrets.FTP_PRIVATE_DIR }}
-      CURL: --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 5 --ftp-skip-pasv-ip
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-      - name: Bağlantı ayarlarını düzenle
+
+      - name: Bağlantı ayarlarını hazırla
+        env:
+          SCHEME: ${{ secrets.FTP_SCHEME || 'ftp' }}
+          HOSTRAW: ${{ secrets.FTP_HOST }}
+          HOSTALT: ${{ secrets.FTP_HOST_ALT }}
+          OPTS: ${{ secrets.FTP_CURL_OPTS }}
+          WEBRAW: ${{ secrets.FTP_WEB_DIR }}
+          PRIVRAW: ${{ secrets.FTP_PRIVATE_DIR }}
         run: |
-          h="${HOSTRAW#*://}"; h="${h%%/*}"; h="${h//[[:space:]]/}"
-          w="${WEBRAW//[[:space:]]/}"; p="${PRIVRAW//[[:space:]]/}"
-          w="/${w#/}"; w="${w%/}"; p="/${p#/}"; p="${p%/}"
-          [ -n "$h" ] || { echo "FTP_HOST boş"; exit 1; }
-          echo "FTP=$SCHEME://$h" >> "$GITHUB_ENV"
-          echo "WEB=$w" >> "$GITHUB_ENV"
-          echo "PRIV=$p" >> "$GITHUB_ENV"
+          set -euo pipefail
+          norm() { local v="${1//[[:space:]]/}"; v="${v#*://}"; v="${v%%/*}"; printf '%s' "$v"; }
+          H="$(norm "$HOSTRAW")"; HA="$(norm "$HOSTALT")"
+          W="$(printf '%s' "$WEBRAW" | tr -d '[:space:]')"; P="$(printf '%s' "$PRIVRAW" | tr -d '[:space:]')"
+          [ -n "$H" ] || { echo "::error::FTP_HOST secret boş. Sunucu IP'sini (ör. 104.247.167.50) gir."; exit 1; }
+          W="/${W#/}"; W="${W%/}"; P="/${P#/}"; P="${P%/}"
+          [ -n "$P" ] || P="/amfi-private"
+          echo "HOSTS=$H${HA:+ $HA}" >> "$GITHUB_ENV"
+          echo "WEB=$W"   >> "$GITHUB_ENV"
+          echo "PRIV=$P"  >> "$GITHUB_ENV"
+          echo "OPTS=$OPTS" >> "$GITHUB_ENV"
+          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+          echo "Web klasörü: $W · Özel klasör: $P"
+
+      - name: FTP bağlantısını doğrula (IP fallback dahil)
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
+        run: |
+          set -uo pipefail
+          ok=0
+          for host in $HOSTS; do
+            for sch in "$SCHEME" ftp; do
+              if curl -sS $CURL $OPTS -u "$AUTH" --list-only "$sch://$host/" > /dev/null 2>&1; then
+                echo "FTP=$sch://$host" >> "$GITHUB_ENV"; ok=1; break 2
+              fi
+            done
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::FTP'ye bağlanılamadı. FTP_HOST Cloudflare'e bakıyorsa FTP çalışmaz: ya FTP_HOST'u sunucu IP'si yap ya da Cloudflare'de ftp kaydını proxy'siz (gri bulut) yap."
+            exit 1
+          fi
+          echo "FTP bağlantısı tamam: $FTP"
+
       - name: Klasörleri hazırla ve doğrula
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
         run: |
-          curl -sS $CURL $OPTS -u "$AUTH" -Q "-MKD $PRIV" "$FTP/" -o /dev/null || true
-          if ! curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP$WEB/" -o /dev/null; then
-            echo "HATA: FTP_WEB_DIR ($WEB) sunucuda bulunamadı. FTP girişinde görünen ana klasörler:"
-            curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP/" || true
-            exit 1
+          set -uo pipefail
+          curl -sS $CURL $OPTS -u "$AUTH" -Q "-MKD $WEB" "$FTP/" > /dev/null 2>&1 || true
+          curl -sS $CURL $OPTS -u "$AUTH" -Q "-MKD $PRIV" "$FTP/" > /dev/null 2>&1 || true
+          for d in "$WEB" "$PRIV"; do
+            if ! curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP$d/" > /dev/null 2>&1; then
+              echo "::error::Klasör yok veya bu FTP hesabı göremiyor: $d"
+              echo "FTP girişinde görünen kök:"; curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP/" | head -30 || true
+              exit 1
+            fi
+          done
+          # özel klasörü web'den kapat
+          printf 'Require all denied\nOptions -Indexes\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n' > .htaccess-priv
+          curl -sS $CURL $OPTS -u "$AUTH" -T .htaccess-priv "$FTP$PRIV/.htaccess" > /dev/null 2>&1 || true
+      - name: Durumu eski data branch'ten taşı (tek seferlik)
+        if: ${{ secrets.STATE_KEY != '' }}
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
+          GH_TOKEN: ${{ github.token }}
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+        run: |
+          set -uo pipefail
+          if curl -sS $CURL $OPTS -u "$AUTH" --head "$FTP$PRIV/private.json" > /dev/null 2>&1; then
+            echo "Sunucuda private.json var, taşıma atlandı."
+            exit 0
           fi
-          if ! curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP$PRIV/" -o /dev/null; then
-            echo "HATA: FTP_PRIVATE_DIR ($PRIV) oluşturulamadı. Ana klasörler:"
-            curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP/" || true
-            exit 1
+          echo "Sunucuda state yok; eski data branch'ten taşınıyor..."
+          if git clone -q --depth 1 --branch data "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" state 2>/dev/null && [ -s state/private.enc ]; then
+            if node state.js dec && [ -s private.json ]; then
+              curl -sS $CURL $OPTS -u "$AUTH" -T private.json "$FTP$PRIV/private.json" && echo "Eski durum sunucuya taşındı."
+            else
+              echo "::warning::Eski durum çözülemedi (STATE_KEY uyuşmuyor olabilir); ilk kurulum gibi devam ediliyor."
+            fi
+          else
+            echo "Eski durum bulunamadı; ilk kurulum gibi devam ediliyor."
           fi
+
       - name: Durumu sunucudan indir
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
         run: |
+          set -uo pipefail
           get() {
             c=0; curl -sS $CURL $OPTS -u "$AUTH" "$FTP$1" -o "$2" || c=$?
             if [ $c -eq 0 ]; then return 0
             elif [ $c -eq 78 ]; then rm -f "$2"; echo "$2 sunucuda yok (ilk çalışma)"; return 0
-            else echo "FTP indirme hatası (kod $c). Durduruldu; durum kaybolmasın diye devam edilmiyor."; return 1; fi
+            else echo "::error::FTP indirme hatası (kod $c) - $1"; return 1; fi
           }
-          get "$PRIV/private.json" private.json
-          get "$WEB/data.json" data.json
+          get "$PRIV/private.json" private.json || exit 1
+          get "$WEB/data.json" data.json || exit 1
           [ -s private.json ] || rm -f private.json
           if [ -s data.json ] && [ ! -f private.json ] && grep -q '"seats":{"' data.json; then
-            echo "UYARI: data.json dolu ama private.json bulunamadı. Durum kaybı olmaması için durduruldu."; exit 1
+            echo "::error::data.json dolu ama private.json yok. Durum kaybı olmasın diye durduruldu."
+            exit 1
           fi
+
       - name: Senkronize et
         run: node sync.js
         env:
           IG_TOKEN: ${{ secrets.IG_TOKEN }}
-          VERIFIED_CSV_URL: ${{ secrets.VERIFIED_CSV_URL }}
+          SALT: ${{ secrets.SALT }}
           PAGE_ID: ${{ secrets.PAGE_ID }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          API_VERSION: ${{ secrets.API_VERSION }}
+          API_MODE: ${{ secrets.API_MODE }}
           COMMENT_KEYWORD: ${{ secrets.COMMENT_KEYWORD }}
-          SALT: ${{ secrets.SALT }}
+          MEDIA_IDS: ${{ secrets.MEDIA_IDS }}
+          VERIFIED_CSV_URL: ${{ secrets.VERIFIED_CSV_URL }}
+          SITE_URL: ${{ secrets.SITE_URL || 'https://amfi.englishbase.com.tr' }}
+          TOTAL: ${{ secrets.TOTAL || '50000' }}
+          STEP: ${{ secrets.STEP || '10000' }}
+          REQUIRE_COMMENT: ${{ secrets.REQUIRE_COMMENT || '0' }}
+          AUTO_DM: ${{ secrets.AUTO_DM || '1' }}
+          MAX_SEND: ${{ secrets.MAX_SEND || '60' }}
+          MAX_CALLS: ${{ secrets.MAX_CALLS || '400' }}
+          RECHECK: ${{ secrets.RECHECK || '40' }}
+          MSG_ASK: ${{ secrets.MSG_ASK }}
+          MSG_BTN: ${{ secrets.MSG_BTN }}
+          MSG_OK: ${{ secrets.MSG_OK }}
+          MSG_NO: ${{ secrets.MSG_NO }}
+          VERBOSE: ${{ secrets.VERBOSE }}
+          DRY: ${{ inputs.dry && '1' || '0' }}
+
       - name: Sunucuya yükle
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
         run: |
-          curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T private.json "$FTP$PRIV/private.json"
-          curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T data.json "$FTP$WEB/data.json"
+          set -uo pipefail
+          curl -sS $CURL $OPTS -u "$AUTH" -T private.json "$FTP$PRIV/private.json" || { echo "::error::private.json yüklenemedi"; exit 1; }
+          curl -sS $CURL $OPTS -u "$AUTH" -T data.json "$FTP$WEB/data.json"     || { echo "::error::data.json yüklenemedi"; exit 1; }
+          echo "Yükleme tamam. Sunucudaki dosya:"
+          curl -sS $CURL $OPTS -u "$AUTH" "$FTP$WEB/data.json" | head -c 300; echo
+
+      - name: Siteyi doğrula
+        run: |
+          set -uo pipefail
+          L=$(node -e "const d=require('./data.json');console.log(Object.keys(d.seats).length)")
+          R=$(curl -sS --max-time 25 "$SITE/data.json?t=$GITHUB_RUN_ID" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(Object.keys(JSON.parse(s).seats).length)}catch(e){console.log('okunamadi')}})")
+          echo "Yerel masa sayısı: $L · Sitede görünen: $R"
+          [ "$R" = "$L" ] || echo "::warning::Site farklı sayı gösteriyor (CDN/önbellek veya FTP_WEB_DIR yanlış olabilir)."
+
       - name: Bağlantı tanısı (yalnızca hata olursa)
         if: failure()
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
         run: |
+          set -uo pipefail
           H="${FTP#*://}"
           for p in 21 22 990; do
-            if timeout 8 bash -c "exec 3<>/dev/tcp/$H/$p" 2>/dev/null; then echo "port $p: ACIK"; else echo "port $p: KAPALI veya erisilemiyor"; fi
+            if timeout 8 bash -c "exec 3<>/dev/tcp/$H/$p" 2>/dev/null; then echo "port $p: ACIK"; else echo "port $p: KAPALI/erişilemiyor"; fi
           done
-          curl -v $OPTS --connect-timeout 15 --max-time 30 --ftp-skip-pasv-ip -u "$AUTH" "$FTP/" --list-only 2>&1 | grep -vi "pass" | head -40 || true
+          curl -v $OPTS --connect-timeout 15 --max-time 30 -u "$AUTH" "$FTP/" --list-only 2>&1 | sed 's/[Pp]assword.*/[password REDACTED]/' | head -40 || true

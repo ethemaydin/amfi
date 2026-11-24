@@ -1,0 +1,9 @@
+# sırlar / çalışma çıktıları (asla commit edilmez)
+private.json
+private.json.tmp
+data.json
+data.json.tmp
+state/
+node_modules/
+.env
+*.log
