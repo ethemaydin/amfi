@@ -67,6 +67,7 @@ async function api(path, params = {}, soft = false) {
   return null;
 }
 const postErrs = new Set();
+let lastPostErr = "";
 async function post(path, body) {
   for (let attempt = 0; attempt < 2; attempt++) {
     calls++;
@@ -76,9 +77,11 @@ async function post(path, body) {
       if (j.error) {
         if (attempt === 0 && (r.status === 429 || j.error.code === 4 || RATE_RX.test(j.error.message || ""))) { await sleep(3000); continue; }
         const m = `${j.error.message || "?"} (kod ${j.error.code || "?"}${j.error.error_subcode ? "/" + j.error.error_subcode : ""})`;
+        lastPostErr = m;
         if (postErrs.size < 5 && !postErrs.has(m)) { postErrs.add(m); console.error("GÖNDERİM HATASI:", path, "->", m); }
         throw new Error(m);
       }
+      lastPostErr = "";
       return j;
     } catch (e) {
       if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1500); continue; }
@@ -128,14 +131,23 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
 
   const rec = (name) => { const k = name.toLowerCase(); return users[k] || (users[k] = { u: name, first: now, checked: 0 }); };
   const events = [];
+  const WIN_RX = /izin verilen zaman|outside|24 hour|allowed window|zaman aral/i;
+  const canDm = (r) => now - (r.lastd || 0) < 24 * 36e5;                       // 24 saatlik standart pencere
+  const canReply = (r) => !!r.cid && now - (r.cts || 0) < 6.5 * 864e5;          // yoruma özel yanıt (7 gün)
   const sendOne = async (recipient, message) => {
     if (DRY) { console.log(`[DRY] DM -> ${JSON.stringify(recipient)} :: ${(message.text || "").slice(0, 70)}${message.quick_replies ? " [butonlu]" : ""}`); return { dry: true }; }
-    let j = await post(`/${IG_ID}/messages`, { recipient, message });
-    if (!j && FB && PAGE_ID && PAGE_ID !== IG_ID) j = await post(`/${PAGE_ID}/messages`, { recipient, message });
+    const targets = (FB && PAGE_ID && PAGE_ID !== IG_ID) ? [PAGE_ID, IG_ID] : [IG_ID];
+    let j = null;
+    for (const t of targets) {
+      j = await post(`/${t}/messages`, { recipient, message });
+      if (j) break;
+      if (WIN_RX.test(lastPostErr)) break;   // pencere kapalıysa diğer endpoint'i denemek boşuna
+    }
     return j;
   };
   const dm = async (recipient, text, btn) => {
     if (sent >= MAX_SEND || !IG_ID) return false;
+    if (!DRY) await sleep(120);                    // kısa aralık: uygulama hız limitine takılmayalım
     const message = { text };
     if (btn) message.quick_replies = [{ content_type: "text", title: btn, payload: "TAKIP" }];
     let j = await sendOne(recipient, message);
@@ -206,7 +218,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     const r = rec(ev.name), k = ev.name.toLowerCase();
     const w = WANT.exec(ev.text);
     if (ev.src === "c") { if (!KEY || KEY.test(ev.text)) { r.c = true; r.cid = ev.id; r.cts = ev.ts; } }
-    else { r.d = true; r.igsid = ev.igsid; }
+    else { r.d = true; r.igsid = ev.igsid; r.lastd = Math.max(r.lastd || 0, ev.ts); }
     if (DEL.test(ev.text)) { if (!isWinner(k)) { unseat(k); r.removed = true; r.c = r.d = false; } continue; }
     if (r.removed) { if (JOIN.test(ev.text) && ev.src === "d") r.removed = false; else continue; }
     r.fresh = true;
@@ -266,8 +278,11 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     if (f === true) {
       const d = r.want && !seats[r.want] ? r.want : nextFree();
       seats[d] = r.u; r.member = true; r.desk = d; r.want = 0; order.push(k);
-      if (AUTO && r.igsid !== "csv") { if (await dm({ id: r.igsid }, T_OK(d))) r.ok = true; }
-    } else if (f === false && AUTO && now - (r.warn || 0) > WARN_CD) { r.warn = now; await dm({ id: r.igsid }, T_NO, T_BTN); }
+      if (AUTO && r.igsid !== "csv") {
+        if (canDm(r)) { if (await dm({ id: r.igsid }, T_OK(d))) r.ok = true; }
+        else if (canReply(r)) { if (await dm({ comment_id: r.cid }, T_OK(d))) r.ok = true; }   // pencere kapalı: yoruma özel yanıt
+      }
+    } else if (f === false && AUTO && canDm(r) && now - (r.warn || 0) > WARN_CD) { r.warn = now; await dm({ id: r.igsid }, T_NO, T_BTN); }
     if (calls >= MAX_CALLS) break;
   }
   // 6) banlılar
@@ -280,9 +295,10 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   if (AUTO) {
     for (const k of order.slice()) {
       const r = users[k];
-      if (r.ok || !r.igsid || r.igsid === "csv") continue;
+      if (r.ok || r.igsid === "csv") continue;
       if (sent >= MAX_SEND || calls >= MAX_CALLS) break;
-      if (await dm({ id: r.igsid }, T_OK(r.desk))) r.ok = true;
+      const okd = canDm(r) ? await dm({ id: r.igsid }, T_OK(r.desk)) : (canReply(r) ? await dm({ comment_id: r.cid }, T_OK(r.desk)) : false);
+      if (okd) r.ok = true;
     }
   }
 
