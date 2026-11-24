@@ -1,0 +1,54 @@
+name: deploy-site
+# site/ klasörü değişince site dosyalarını FTP ile yayına alır (tek seferlik değil, kalıcı otomasyon)
+on:
+  push:
+    branches: [main]
+    paths: ["site/**"]
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: FTP ayarları
+        env:
+          HOST: ${{ secrets.FTP_HOST }}
+          SCHEME: ${{ secrets.FTP_SCHEME || 'ftp' }}
+          WEBRAW: ${{ secrets.FTP_WEB_DIR || '/domains/amfi.englishbase.com.tr/public_html' }}
+        run: |
+          set -euo pipefail
+          H="${HOST#*://}"; H="${H%%/*}"; H="${H//[[:space:]]/}"
+          [ -n "$H" ] || { echo "::error::FTP_HOST boş"; exit 1; }
+          W="$(printf '%s' "$WEBRAW" | tr -d '[:space:]')"; W="/${W#/}"; W="${W%/}"
+          echo "FTP=$SCHEME://$H" >> "$GITHUB_ENV"
+          echo "WEB=$W" >> "$GITHUB_ENV"
+          echo "Hedef: $SCHEME://$H$W"
+      - name: Site dosyalarını yükle (tekrar denemeli)
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
+        run: |
+          set -uo pipefail
+          CURL="--connect-timeout 25 --max-time 120 --ftp-skip-pasv-ip --no-progress-meter"
+          FILES="index.html kosullar.html kvkk.html logo.png favicon.png og.png"
+          for f in $FILES; do
+            [ -f "site/$f" ] || { echo "atlandı (yok): $f"; continue; }
+            ok=0
+            for i in 1 2 3 4 5 6; do
+              if curl -sS $CURL -u "$AUTH" -T "site/$f" "$FTP$WEB/$f"; then ok=1; break; fi
+              echo "  $f: deneme $i başarısız, 15 sn sonra tekrar"
+              sleep 15
+            done
+            if [ "$ok" = 1 ]; then echo "yüklendi: $f"; else echo "::error::$f yüklenemedi"; exit 1; fi
+          done
+      - name: Yüklemeyi doğrula
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
+        run: |
+          set -uo pipefail
+          CURL="--connect-timeout 25 --max-time 120 --ftp-skip-pasv-ip --no-progress-meter"
+          echo "Sunucudaki index.html (ilk 160 bayt):"
+          curl -sS $CURL -u "$AUTH" "$FTP$WEB/index.html" | head -c 160; echo
+          echo "Canlı sayfada GitHub veri kaynağı var mı:"
+          curl -sS --max-time 25 "https://amfi.englishbase.com.tr/?t=$GITHUB_RUN_ID" | grep -c 'raw.githubusercontent' || echo "0 (CDN önbelleği olabilir)"

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>English Base Amfisi · Masanı Bul</title>
+<meta name="description" content="English Base Amfisi’nde yerini al. Her 10.000 kişide İncir bir şanslıyı seçer: 1 aylık ücretsiz Speaking Club.">
+<meta property="og:title" content="English Base Amfisi">
+<meta property="og:image" content="https://amfi.englishbase.com.tr/og.png">
+<meta property="og:url" content="https://amfi.englishbase.com.tr/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.png">
+<meta name="theme-color" content="#d80624">
+<meta property="og:description" content="Masanı bul, İncir’in seçtiği şanslı sen ol: 1 aylık ücretsiz Speaking Club.">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#faf7f5;--card:#fff;--tx:#241418;--mu:#6e6366;--ac:#d80624;--ac2:#e9a23b;--seat:#e6dfdc;--bd:#eadfdc}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#170d10;--card:#241418;--tx:#f6eeee;--mu:#b3a2a6;--ac:#ff3a55;--ac2:#f0b455;--seat:#3a2429;--bd:#3a2429}}
+:root[data-theme="dark"]{--bg:#170d10;--card:#241418;--tx:#f6eeee;--mu:#b3a2a6;--ac:#ff3a55;--ac2:#f0b455;--seat:#3a2429;--bd:#3a2429}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+main{max-width:900px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:1.9rem;line-height:1.1;margin:6px 0 8px;letter-spacing:-.02em}
+h1 em{color:var(--ac);font-style:normal}
+h2{font-size:1.05rem;margin:24px 0 10px}
+p{margin:0 0 10px;color:var(--mu)}
+.tag{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);font-weight:700}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px}
+.big{font-size:2.2rem;font-weight:800}
+.bar{height:12px;background:var(--seat);border-radius:99px;overflow:hidden;margin:10px 0}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--ac),var(--ac2));width:0;transition:width .8s}
+.ms{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:8px}
+.ms li{display:flex;gap:10px;font-size:.92rem}.ms b{min-width:56px}.ms .ok{color:var(--ac)}
+.row{display:flex;gap:8px}
+input{flex:1;min-width:0;font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:12px 16px;background:var(--ac);color:#fff;cursor:pointer}
+button.alt{background:var(--seat);color:var(--tx)}
+.btn{flex:1;text-align:center;text-decoration:none;font-weight:700;border-radius:12px;padding:12px 16px;background:var(--ac);color:#fff}.btn.alt{background:var(--seat);color:var(--tx)}
+footer a{color:var(--ac)}#logo{border-radius:12px;margin-bottom:6px}
+#res{margin-top:12px;display:none}
+#stage{position:relative;width:100%;height:64vh;min-height:320px;max-height:660px;border-radius:18px;overflow:hidden;background:#9fd8f0;margin-top:8px}
+#gl{width:100%;height:100%;display:block;touch-action:none}
+#hint{position:absolute;left:10px;bottom:8px;font-size:.75rem;color:#12301f;background:rgba(255,255,255,.7);padding:3px 9px;border-radius:99px;pointer-events:none}
+#tip{position:absolute;top:10px;left:10px;right:10px;text-align:center;font-weight:700;font-size:.9rem;color:#12301f;background:rgba(255,255,255,.85);border-radius:12px;padding:6px 10px;display:none;pointer-events:none}
+#tb{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+#tb button{padding:8px 10px;font-size:.85rem;min-width:46px;opacity:.95}
+#mm{position:absolute;right:10px;bottom:10px;width:110px;height:110px;border-radius:12px;background:rgba(255,255,255,.8);touch-action:none}
+#dp{position:absolute;left:10px;bottom:10px;display:grid;grid-template-columns:repeat(3,44px);grid-auto-rows:44px;gap:4px}
+#dp button{padding:0;font-size:1.1rem;touch-action:none;background:rgba(255,255,255,.88);color:#12301f;border-radius:12px}
+dialog{border:0;border-radius:18px;padding:16px;background:var(--card);color:var(--tx);max-width:92vw;width:380px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog img{width:100%;border-radius:12px;display:block}
+.steps{padding-left:18px;color:var(--mu);font-size:.9rem}
+footer{margin-top:28px;font-size:.8rem;color:var(--mu);text-align:center}
+</style>
+</head>
+<body>
+<main>
+<img id="logo" src="logo.png" alt="English Base" width="64" height="61" onerror="this.style.display='none'">
+<div class="tag" id="tag"></div>
+<h1>Bu amfide <em>senin de masan var.</em></h1>
+<p>Hesabı takip et, sonra DM’den <b>katıl</b> yaz (ya da son gönderiye yorum bırak); takibin doğrulanınca adın bir masaya yazılsın. Masanı bul, kartını story’nde paylaş, arkadaşlarını çağır.</p>
+
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <div id="tip"></div>
+  <div id="tb"><button class="alt" id="zi">＋</button><button class="alt" id="zo">－</button><button class="alt" id="tv">Üst</button><button class="alt" id="rs">Tahta</button><button class="alt" id="al">Hepsi</button><button id="ic">🐱</button></div>
+  <canvas id="mm" width="220" height="220"></canvas>
+  <div id="dp"><div></div><button data-m="0,-1">▲</button><div></div><button data-m="-1,0">◀</button><div></div><button data-m="1,0">▶</button><div></div><button data-m="0,1">▼</button><div></div></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div class="big"><span id="cnt">0</span> <span style="font-size:1rem;color:var(--mu)">/ <span id="tot"></span> masa</span></div>
+  <div class="bar"><i id="fill"></i></div>
+  <ul class="ms" id="ms"></ul>
+</div>
+
+<div class="card" style="margin-top:12px"><b>🐱 İncir hangi masaya oturursa…</b><p style="margin:6px 0 0">Her 10.000 masada sınıfımızın kedisi İncir bir masayı otomatik seçer. Seçim otomatik yapılır ve kazananın hesabı o anda takip ediyor mu diye kontrol edilir; takip etmeyen çıkarılır, yeniden çekilir. O masanın sahibi 1 aylık ücretsiz Speaking Club kazanır.</p></div>
+
+<h2>🏆 Kazananlar</h2>
+<div class="card" id="wl"></div>
+
+<h2>Masan hangisi?</h2>
+<div class="row">
+  <input id="q" placeholder="Kullanıcı adın veya masa no" autocomplete="off" autocapitalize="off" enterkeyhint="search">
+  <button id="go">Ara</button>
+</div>
+<div class="card" id="res"></div>
+
+<h2>Nasıl katılırım?</h2>
+<ol class="steps">
+  <li><b>Takip et (zorunlu):</b> @englishbase.tr hesabını takip et. Takip etmeyen listeye giremez.</li>
+  <li><b>En kolay yol:</b> DM’den <b>katıl</b> yaz. Takibin doğrulanırsa masan otomatik ayrılır — yorum yazmak zorunlu değil.</li>
+  <li><b>Yorum yazarsan:</b> sistem sana düğmeli bir DM atar; <b>Takip ettim</b> düğmesine basman yeterli.</li>
+  <li>Masanı seçmek veya değiştirmek için DM’e <b>masa 12345</b> yaz. Masa boşsa taşınırsın.</li>
+  <li>Listeden çıkmak için DM’e <b>kaldır</b> yaz.</li>
+</ol>
+<div class="row" style="margin-top:12px"><a class="btn" href="https://instagram.com/englishbase.tr" target="_blank" rel="noopener">Takip et</a><a class="btn alt" href="https://ig.me/m/englishbase.tr" target="_blank" rel="noopener">DM at</a></div>
+<footer>© English Base · <a href="kvkk.html">KVKK Aydınlatma Metni</a> · <a href="kosullar.html">Katılım Koşulları</a><br>Bu kampanya Instagram/Meta ile bağlantılı değildir ve Meta tarafından desteklenmez.</footer>
+</main>
+
+<dialog id="dlg">
+  <p id="dmsg" style="margin-bottom:10px"></p>
+  <img id="cardimg" alt="Masa kartı">
+  <div class="row" style="margin-top:12px"><button id="share">Paylaş</button><button class="alt" id="close">Kapat</button></div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ===== AYARLAR: burayı kendi dersanene göre düzenle =====
+const CFG={
+  name:"English Base Amfisi",
+  handle:"@englishbase.tr",
+  total:50000,
+  step:10000,
+  prize:"1 aylık ücretsiz Speaking Club",
+  dataUrl:"https://raw.githubusercontent.com/ethemaydin/amfi/data/data.json",   // ana kaynak: workflow her 10 dk günceller
+  dataUrlFallback:"data.json"                                                  // yedek: siteye elle yüklenen kopya
+};
+// Kullanıcı adları (@ olmadan, virgülle)
+let DATA={seats:{},winners:[],followers:0,updated:""};
+let dataLoaded=false,DSrc=null;
+const bucket=()=>Math.floor(Date.now()/3e4);   // 30 sn'lik önbellek anahtarı: veri neredeyse anında tazelenir
+for(const src of [CFG.dataUrl,CFG.dataUrlFallback]){
+  if(dataLoaded||!src)continue;
+  try{const x=new XMLHttpRequest();x.open("GET",src+"?t="+bucket(),false);x.send();
+    if(x.status===200){const d=JSON.parse(x.responseText);
+      if(d&&d.seats&&typeof d.seats==="object"){
+        DATA={seats:{},winners:d.winners||[],followers:d.followers||0,updated:d.updated||"",sig:Object.keys(d.seats).length+"|"+(d.winners||[]).length};
+        for(const k in d.seats){if(/^[A-Za-z0-9._]{1,30}$/.test(d.seats[k]))DATA.seats[k]=d.seats[k]}
+        dataLoaded=true;DSrc=src;
+      }}}catch(e){}
+}
+if(dataLoaded)setInterval(()=>fetch(DSrc+"?t="+bucket()).then(r=>r.json()).then(d=>{
+  if(!d||!d.seats)return;
+  const sig=Object.keys(d.seats).length+"|"+(d.winners||[]).length;
+  if((d.updated&&d.updated!==DATA.updated)||sig!==DATA.sig)location.reload();
+}).catch(()=>{}),30000);
+// =========================================================
+const $=id=>document.getElementById(id);
+const seats=[];let n=0;
+for(let d=1;d<=CFG.total;d++)seats.push({d,u:DATA.seats[d]||null});
+const wins=[];for(let m=CFG.step;m<=CFG.total;m+=CFG.step)wins.push({m,d:((DATA.winners||[]).find(x=>x.m===m)||{}).desk||null});
+const filled=seats.filter(s=>s.u).length;
+$("tag").textContent=CFG.name;$("tot").textContent=CFG.total.toLocaleString("tr-TR");$("cnt").textContent=filled;
+document.querySelectorAll(".h").forEach(e=>e.textContent=CFG.handle);
+setTimeout(()=>$("fill").style.width=Math.min(100,filled/CFG.total*100)+"%",100);
+$("ms").innerHTML=wins.map((w,i)=>{const ok=filled>=w.m,s=w.d&&seats[w.d-1];
+return `<li class="${ok?"ok":""}"><b>${w.m.toLocaleString("tr-TR")}</b><span>${ok?"✓ ":""}${i+1}. şanslı · ${CFG.prize}${s?` · İncir masa ${s.d}’ye oturdu${s.u?" → @"+s.u:""}`:ok?" · İncir seçiyor…":""}</span></li>`}).join("");
+$("ms").querySelectorAll("li").forEach((li,i)=>{const d=wins[i].d;if(d){li.style.cursor="pointer";li.onclick=()=>show(seats[d-1])}});
+$("wl").innerHTML=wins.some(w=>w.d)?"<ol style='margin:0;padding-left:22px'>"+wins.filter(w=>w.d).map(w=>`<li data-d="${w.d}" style="cursor:pointer;margin:4px 0"><b>${w.m.toLocaleString("tr-TR")}</b> · @${seats[w.d-1].u} · Masa ${String(w.d).padStart(5,"0")}</li>`).join("")+"</ol>":"<p style='margin:0'>İlk çekiliş 10.000 masada. İncir otomatik seçecek ve kazananlar burada sırayla yazılacak.</p>";
+$("wl").querySelectorAll("li").forEach(li=>{li.onclick=()=>show(seats[+li.dataset.d-1])});
+
+// ---- 3D ----
+const cv=$("gl"),st=$("stage");
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+R.setPixelRatio(Math.min(devicePixelRatio,2));
+const skc=document.createElement("canvas");skc.width=2;skc.height=256;const sk=skc.getContext("2d"),sg=sk.createLinearGradient(0,0,0,256);
+sg.addColorStop(0,"#4aa8ee");sg.addColorStop(.6,"#a9d9f5");sg.addColorStop(1,"#e8f6fd");sk.fillStyle=sg;sk.fillRect(0,0,2,256);
+const sc=new THREE.Scene();sc.background=new THREE.CanvasTexture(skc);sc.fog=new THREE.Fog(0xcfe9f7,220,560);
+const cam=new THREE.PerspectiveCamera(50,1,.1,800);
+sc.add(new THREE.HemisphereLight(0xdff3ff,0x7fae6a,.95));
+const sun=new THREE.DirectionalLight(0xfff0cf,.85);sun.position.set(30,50,20);sc.add(sun);
+const gc=document.createElement("canvas");gc.width=gc.height=128;const gx=gc.getContext("2d");gx.fillStyle="#74c06a";gx.fillRect(0,0,128,128);
+for(let i=0;i<900;i++){gx.fillStyle=["#68b25f","#82cc77","#6ab860"][i%3];gx.fillRect(Math.random()*128,Math.random()*128,2,2)}
+const gt=new THREE.CanvasTexture(gc);gt.wrapS=gt.wrapT=THREE.RepeatWrapping;gt.repeat.set(160,160);
+const ground=new THREE.Mesh(new THREE.CircleGeometry(320,64),new THREE.MeshLambertMaterial({map:gt}));
+ground.rotation.x=-Math.PI/2;sc.add(ground);
+const cw=new THREE.MeshLambertMaterial({color:0xffffff,fog:false}),clouds=[];
+for(let i=0;i<22;i++){const g=new THREE.Group();for(let j=0;j<5;j++){const s=new THREE.Mesh(new THREE.SphereGeometry(8+Math.random()*6,7,5),cw);s.position.set(j*9-18,Math.random()*4,Math.random()*6);s.scale.y=.55;g.add(s)}
+  const a=Math.random()*Math.PI*2,r=200+Math.random()*120;g.position.set(Math.cos(a)*r,90+Math.random()*50,Math.sin(a)*r);sc.add(g);clouds.push(g)}
+const bushM=new THREE.MeshLambertMaterial({color:0x3f9c4a});
+for(let i=0;i<70;i++){const a=Math.random()*Math.PI*2,r=165+Math.random()*12,b=new THREE.Mesh(new THREE.IcosahedronGeometry(1.4+Math.random(),0),bushM);b.position.set(Math.cos(a)*r,.9,Math.sin(a)*r);sc.add(b)}
+const flc=[0xff4f81,0xffd23f,0xffffff,0xb388ff,0xff8a3d];
+for(let i=0;i<60;i++){const f=new THREE.Mesh(new THREE.SphereGeometry(.18,5,4),new THREE.MeshLambertMaterial({color:flc[i%5]}));f.position.set(-9+Math.random()*18,.2,2+Math.random()*6);sc.add(f)}
+new THREE.TextureLoader().load("logo.png",t=>{const l=new THREE.Mesh(new THREE.PlaneGeometry(3.2,3.05),new THREE.MeshBasicMaterial({map:t}));l.position.set(0,6.9,-.8);sc.add(l)},undefined,()=>{});
+
+// tahta
+const bc=document.createElement("canvas");bc.width=512;bc.height=200;
+const bx=bc.getContext("2d");bx.fillStyle="#d80624";bx.fillRect(0,0,512,200);
+bx.strokeStyle="#c9a26b";bx.lineWidth=10;bx.strokeRect(5,5,502,190);
+bx.fillStyle="#fff";bx.textAlign="center";bx.font="700 38px system-ui,sans-serif";bx.fillText("Ücretsiz Speaking Club",256,90);
+bx.fillStyle="#fff";bx.font="600 30px system-ui,sans-serif";bx.fillText("@englishbase.tr",256,145);
+const board=new THREE.Mesh(new THREE.BoxGeometry(10,4,.3),new THREE.MeshLambertMaterial({map:new THREE.CanvasTexture(bc)}));
+board.position.set(0,3,-1);sc.add(board);
+[-4,4].forEach(x=>{const l=new THREE.Mesh(new THREE.BoxGeometry(.3,2,.3),new THREE.MeshLambertMaterial({color:0x8a6a45}));l.position.set(x,1,-1);sc.add(l)});
+
+// ağaçlar
+const trunk=new THREE.MeshLambertMaterial({color:0x7a5230}),leaf=new THREE.MeshLambertMaterial({color:0x2f8f4b});
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+for(let i=0;i<120;i++){
+  const a=rnd()*Math.PI*2,r=180+rnd()*120,s=1.8+rnd()*1.6;
+  const t=new THREE.Group();
+  const k=new THREE.Mesh(new THREE.CylinderGeometry(.3,.4,2,6),trunk);k.position.y=1;
+  const c=new THREE.Mesh(new THREE.ConeGeometry(1.8,5,7),leaf);c.position.y=4.2;
+  t.add(k,c);t.scale.setScalar(s);t.position.set(Math.cos(a)*r,0,Math.sin(a)*r);sc.add(t);
+}
+
+// masalar (yarım daire amfi)
+const pos=[];let row=0;
+while(pos.length<CFG.total){
+  const rad=11+row*1.3,span=2.5,cnt=Math.floor(rad*span/.85);
+  for(let i=0;i<cnt&&pos.length<CFG.total;i++){
+    const a=-span/2+span*(i+.5)/cnt;
+    pos.push({x:Math.sin(a)*rad,z:Math.cos(a)*rad,a});
+  }
+  row++;
+}
+const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(.62,.55,.46),new THREE.MeshLambertMaterial({color:0xffffff}),CFG.total);
+const dm=new THREE.Object3D(),col=new THREE.Color();
+seats.forEach((s,i)=>{
+  const p=pos[i];dm.position.set(p.x,.28,p.z);dm.rotation.y=p.a+Math.PI;dm.updateMatrix();
+  mesh.setMatrixAt(i,dm.matrix);
+  mesh.setColorAt(i,col.set(s.u?0xd80624:0xe2c79a));
+  s.p=p;
+});
+function pill(t,bg,fg){const c=document.createElement("canvas");c.width=512;c.height=128;const x=c.getContext("2d");
+x.fillStyle=bg;x.beginPath();if(x.roundRect)x.roundRect(6,10,500,108,54);else x.rect(6,10,500,108);x.fill();
+x.fillStyle=fg;x.textAlign="center";x.font="800 54px system-ui,sans-serif";x.fillText(t,256,86);return new THREE.CanvasTexture(c)}
+function cat(){const g=new THREE.Group(),o=new THREE.MeshLambertMaterial({color:0xe8892b});
+const b=new THREE.Mesh(new THREE.BoxGeometry(.5,.3,.3),o);b.position.y=.2;
+const h=new THREE.Mesh(new THREE.BoxGeometry(.28,.26,.26),o);h.position.set(.3,.38,0);g.add(b,h);
+[-.08,.08].forEach(z=>{const e=new THREE.Mesh(new THREE.ConeGeometry(.06,.12,4),o);e.position.set(.3,.57,z);g.add(e)});
+const t=new THREE.Mesh(new THREE.BoxGeometry(.3,.07,.07),o);t.position.set(-.38,.4,0);t.rotation.z=.6;g.add(t);g.scale.setScalar(4.5);return g}
+const pil=[];const lw=wins.filter(w=>w.d).pop();let anim=false;
+if(lw){const rec=((DATA.winners||[]).find(x=>x.m===lw.m)||{}).at;let seen=false;try{seen=localStorage.getItem("inc"+lw.m)==="1"}catch(e){}
+  anim=!seen&&!!rec&&Date.now()-Date.parse(rec)<172800000}
+const lastM=anim?lw.m:-1;
+wins.forEach(w=>{const s=w.d&&seats[w.d-1];if(!s)return;
+mesh.setColorAt(s.d-1,col.set(0xf0b455));
+if(w.m!==lastM){const c=cat();c.position.set(s.p.x,.55,s.p.z);c.rotation.y=Math.atan2(Math.cos(s.p.a),-Math.sin(s.p.a));sc.add(c)}
+const p=new THREE.Mesh(new THREE.CylinderGeometry(2.5,2.5,160,16,1,true),new THREE.MeshBasicMaterial({color:0xf0b455,transparent:true,opacity:.5,side:THREE.DoubleSide}));
+p.position.set(s.p.x,80,s.p.z);sc.add(p);pil.push(p);
+const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:pill("🐱 İncir · "+w.m.toLocaleString("tr-TR"),"#f0b455","#1d1d1d"),depthTest:false,transparent:true,fog:false}));sp.scale.set(4,1,1);sp.position.set(s.p.x,4.5,s.p.z);sp.renderOrder=9;sc.add(sp)});
+mesh.instanceColor.needsUpdate=true;sc.add(mesh);
+const shirts=[0xe63946,0xff7f11,0xffd23f,0x7bd389,0x2ec4b6,0x3a86ff,0x8338ec,0xff5d8f,0xff006e,0x06d6a0,0x118ab2,0xfb5607,0xb5179e,0x4cc9f0,0xf9c74f,0x90be6d],
+  skins=[0xffdcb8,0xf2c9a0,0xd9a577,0xb87b4f,0x8d5a3a,0x6b4226],hairs=[0x1b1b1b,0x3b2a20,0x6b4423,0xb9863a,0xe8c26d,0xa63a2b,0x2b2b2b,0x1b1b1b,0x3b2a20,0xff4fa3,0x2dd4ff];
+const pm=()=>new THREE.MeshLambertMaterial({color:0xffffff});
+const torsoM=new THREE.InstancedMesh(new THREE.CylinderGeometry(.15,.2,.5,7),pm(),CFG.total);
+const headM=new THREE.InstancedMesh(new THREE.SphereGeometry(.12,7,5),pm(),CFG.total);
+const hairM=new THREE.InstancedMesh(new THREE.SphereGeometry(.13,7,4,0,Math.PI*2,0,Math.PI*.55),pm(),CFG.total);
+sc.add(torsoM,headM,hairM);
+function people(){
+  const o=new THREE.Object3D();let k=0;
+  for(let i=0;i<CFG.total;i++){
+    if(!seats[i].u)continue;
+    const p=seats[i].p,f=1+.6/Math.hypot(p.x,p.z),h=(i*2654435761>>>0),z=.92+(h%9)/50;
+    o.rotation.y=p.a;o.scale.setScalar(z);
+    o.position.set(p.x*f,.62*z,p.z*f);o.updateMatrix();torsoM.setMatrixAt(k,o.matrix);torsoM.setColorAt(k,col.set(shirts[h%16]));
+    o.position.y=z;o.updateMatrix();headM.setMatrixAt(k,o.matrix);headM.setColorAt(k,col.set(skins[(h>>>4)%6]));
+    o.position.y=1.03*z;o.updateMatrix();hairM.setMatrixAt(k,o.matrix);hairM.setColorAt(k,col.set(hairs[(h>>>8)%hairs.length]));k++;
+  }
+  torsoM.count=headM.count=hairM.count=k;
+  [torsoM,headM,hairM].forEach(m=>{m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true});
+}
+people();
+const mas=cat();mas.position.set(7,0,0);mas.rotation.y=-Math.PI/2;sc.add(mas);
+const mst=new THREE.Sprite(new THREE.SpriteMaterial({map:pill(anim?"🐱 İncir seçiyor":(wins.find(w=>!w.d)?"🐱 Sıradaki: "+wins.find(w=>!w.d).m.toLocaleString("tr-TR"):"🐱 İncir"),"#f0b455","#1d1d1d"),depthTest:false,transparent:true,fog:false}));mst.scale.set(4,1,1);mst.position.set(7,4.5,0);mst.renderOrder=9;sc.add(mst);
+const LB=[],tex=new Map(),real=[];
+let mt=null,follow=false;
+if(anim){const s=seats[lw.d-1];mt={x:s.p.x,z:s.p.z,s};follow=true;try{localStorage.setItem("inc"+lw.m,"1")}catch(e){}}
+seats.forEach((s,i)=>{if(s.u)real.push(i)});
+for(let i=0;i<80;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true,fog:false,depthWrite:false}));s.scale.set(2.4,.6,1);s.visible=false;s.renderOrder=5;sc.add(s);LB.push(s)}
+function label(u){let t=tex.get(u);if(t)return t;
+  const c=document.createElement("canvas");c.width=256;c.height=64;const x=c.getContext("2d");
+  x.fillStyle="rgba(14,23,18,.85)";x.beginPath();if(x.roundRect)x.roundRect(4,8,248,48,24);else x.rect(4,8,248,48);x.fill();
+  x.fillStyle="#fff";x.textAlign="center";x.font="700 28px system-ui,sans-serif";
+  let s="@"+u;if(s.length>16)s=s.slice(0,15)+"…";x.fillText(s,128,43);
+  t=new THREE.CanvasTexture(c);tex.set(u,t);return t}
+let fr=0;
+function labels(){
+  const c=cam.position,L=[];
+  for(const i of real){const p=seats[i].p,dx=p.x-c.x,dz=p.z-c.z,d=dx*dx+c.y*c.y+dz*dz;if(d<2500)L.push([d,i])}
+  L.sort((a,b)=>a[0]-b[0]);
+  LB.forEach((s,k)=>{const e=L[k];if(!e){s.visible=false;return}
+    const q=seats[e[1]],p=q.p,f=1+.6/Math.hypot(p.x,p.z),t=label(q.u);
+    if(s.material.map!==t){const first=!s.material.map;s.material.map=t;if(first)s.material.needsUpdate=true}
+    s.position.set(p.x*f,1.5,p.z*f);s.visible=true})
+}
+
+const mk=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,9,16,1,true),new THREE.MeshBasicMaterial({color:0xf0b455,transparent:true,opacity:.4,side:THREE.DoubleSide}));
+mk.visible=false;sc.add(mk);
+
+
+// kamera
+const home={tx:0,tz:14,r:55,phi:.95,th:0};
+const g={...home,ty:0},c={...home,ty:0};
+function place(){
+  cam.position.set(c.tx+c.r*Math.sin(c.phi)*Math.sin(c.th),c.ty+c.r*Math.cos(c.phi),c.tz+c.r*Math.sin(c.phi)*Math.cos(c.th));
+  cam.lookAt(c.tx,c.ty,c.tz);
+}
+function size(){const w=st.clientWidth,h=st.clientHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+addEventListener("resize",size);size();
+function loop(){
+  for(const k of ["tx","ty","tz","r","phi","th"])c[k]+=(g[k]-c[k])*.09;
+  pil.forEach(p=>p.rotation.y+=.02);clouds.forEach(c=>{c.position.x+=.02;if(c.position.x>330)c.position.x=-330});
+if(mt){const dx=mt.x-mas.position.x,dz=mt.z-mas.position.z,d=Math.hypot(dx,dz);
+  if(d>.4){const sp=Math.min(d,Math.max(.5,d*.04));mas.position.x+=dx/d*sp;mas.position.z+=dz/d*sp;mas.position.y=Math.abs(Math.sin(fr*.4))*.5*Math.min(1,d/5);mas.rotation.y=Math.atan2(-dz,dx)}
+  else if(!mt.done){mt.done=true;mas.position.set(mt.x,.55,mt.z);mas.rotation.y=Math.atan2(Math.cos(mt.s.p.a),-Math.sin(mt.s.p.a));mst.material.map=pill("🐱 İncir seçti: "+(mt.s.u?"@"+mt.s.u:"masa "+mt.s.d),"#f0b455","#1d1d1d");mst.material.needsUpdate=true;setTimeout(()=>{follow=false},2500)}
+  mst.position.set(mas.position.x,4.5,mas.position.z);
+  if(follow){g.tx=mas.position.x;g.tz=mas.position.z;g.ty=0;g.r=Math.min(g.r,35);g.phi=1;g.th=0}}
+place();if(++fr%10===0){labels();drawMM()}R.render(sc,cam);requestAnimationFrame(loop);
+}
+loop();
+$("rs").onclick=()=>{Object.assign(g,home,{ty:0});unsel()};
+const mmv=$("mm"),mmc=mmv.getContext("2d"),MW=mmv.width,mmb=document.createElement("canvas");
+mmb.width=mmb.height=MW;
+let maxR=0;for(const s of seats)maxR=Math.max(maxR,Math.hypot(s.p.x,s.p.z));
+function drawBase(){const x=mmb.getContext("2d");x.clearRect(0,0,MW,MW);
+  for(let i=0;i<CFG.total;i++){const s=seats[i],on=!!s.u;x.fillStyle=on?"#d80624":"#b9c4b3";
+    x.fillRect((s.p.x/maxR*.5+.5)*MW,s.p.z/maxR*MW,on?2:1,on?2:1)}}
+function drawMM(){mmc.clearRect(0,0,MW,MW);mmc.drawImage(mmb,0,0);
+  wins.forEach(w=>{if(!w.d)return;const p=seats[w.d-1].p;mmc.fillStyle="#f0b455";mmc.beginPath();mmc.arc((p.x/maxR*.5+.5)*MW,p.z/maxR*MW,6,0,7);mmc.fill()});
+  mmc.strokeStyle="#e5484d";mmc.lineWidth=3;mmc.beginPath();mmc.arc((g.tx/maxR*.5+.5)*MW,g.tz/maxR*MW,9,0,7);mmc.stroke()}
+function mmGo(e){const b=mmv.getBoundingClientRect(),u=(e.clientX-b.left)/b.width,v=(e.clientY-b.top)/b.height;
+  g.tx=(u-.5)*2*maxR;g.tz=Math.max(0,v*maxR);g.ty=0;g.r=Math.min(g.r,45)}
+mmv.addEventListener("pointerdown",e=>{mmv.setPointerCapture(e.pointerId);mmGo(e)});
+mmv.addEventListener("pointermove",e=>{if(e.buttons)mmGo(e)});
+$("al").onclick=()=>{Object.assign(g,{tx:0,ty:0,tz:70,r:170,phi:.95,th:0});follow=false};
+let hold=null;
+document.querySelectorAll("#dp button").forEach(b=>{const[dx,dz]=b.dataset.m.split(",").map(Number);
+  const step=()=>{follow=false;const k=Math.max(.6,g.r*.03);g.tx=Math.max(-maxR,Math.min(maxR,g.tx+dx*k));g.tz=Math.max(-10,Math.min(maxR,g.tz+dz*k))};
+  b.addEventListener("pointerdown",e=>{e.preventDefault();step();clearInterval(hold);hold=setInterval(step,40)});
+  ["pointerup","pointerleave","pointercancel"].forEach(t=>b.addEventListener(t,()=>clearInterval(hold)))});
+$("zi").onclick=()=>{g.r=Math.max(4,g.r*.7)};$("zo").onclick=()=>{g.r=Math.min(320,g.r*1.4)};
+$("tv").onclick=()=>{g.phi=g.phi<.3?.95:.12};
+$("ic").onclick=()=>{const lw=wins.filter(w=>w.d).pop();if(lw)show(seats[lw.d-1]);else Object.assign(g,{tx:7,ty:0,tz:0,r:16,phi:1,th:0})};
+drawBase();drawMM();
+
+// kontrol
+const ptr=new Map();let moved=0,pd=0,pa=null;
+cv.addEventListener("pointerdown",e=>{follow=false;cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);moved=0;if(ptr.size===2){const[a,b]=[...ptr.values()];pd=Math.hypot(a[0]-b[0],a[1]-b[1])}});
+cv.addEventListener("pointermove",e=>{
+  if(!ptr.has(e.pointerId))return;
+  const o=ptr.get(e.pointerId);
+  if(ptr.size===1){pa=null;const dx=e.clientX-o[0],dy=e.clientY-o[1];moved+=Math.abs(dx)+Math.abs(dy);
+    const k=g.r*.0024,sn=Math.sin(g.th),cs=Math.cos(g.th);
+    g.tx=Math.max(-maxR,Math.min(maxR,g.tx+(-cs*dx-sn*dy)*k));g.tz=Math.max(-10,Math.min(maxR,g.tz+(sn*dx-cs*dy)*k))}
+  ptr.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptr.size===2){const[a,b]=[...ptr.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]),an=Math.atan2(b[1]-a[1],b[0]-a[0]);
+    g.r=Math.max(4,Math.min(320,g.r*pd/d));pd=d;
+    
+    pa=an;moved+=10}
+});
+cv.addEventListener("pointerup",e=>{
+  const was=ptr.size===1;ptr.delete(e.pointerId);
+  if(was&&moved<8)pick(e);
+});
+cv.addEventListener("pointercancel",e=>ptr.delete(e.pointerId));
+cv.addEventListener("wheel",e=>{e.preventDefault();g.r=Math.max(4,Math.min(320,g.r*(1+e.deltaY*.001)))},{passive:false});
+const ray=new THREE.Raycaster(),v2=new THREE.Vector2();
+function pick(e){
+  const b=cv.getBoundingClientRect();
+  v2.set((e.clientX-b.left)/b.width*2-1,-((e.clientY-b.top)/b.height)*2+1);
+  ray.setFromCamera(v2,cam);
+  const h=ray.intersectObject(mesh)[0];
+  if(h)show(seats[h.instanceId],true);
+}
+
+// seçim
+let cur=null;
+function unsel(){cur=null;mk.visible=false;$("tip").style.display="none"}
+function fly(s){
+  mk.position.set(s.p.x,4.5,s.p.z);mk.visible=true;
+  Object.assign(g,{tx:s.p.x,ty:0,tz:s.p.z,r:12,phi:1,th:0});
+}
+function show(s,fromMap){
+  cur=s;fly(s);
+  const num=String(s.d).padStart(5,"0");
+  $("tip").style.display="block";$("tip").textContent="Masa "+num+(s.u?" · @"+s.u:s.m?" · Gizemli":" · Boş");
+  const r=$("res");r.style.display="block";
+  if(s.m)r.innerHTML=`<b>Masa ${num} · Gizemli</b><p style="margin:6px 0 0">Bu masaya henüz kimse oturmadı. Sürpriz, hedefe ulaşınca açıklanacak.</p>`;
+  else if(s.u){r.innerHTML=`<b>Masa ${num}</b> · @${s.u}<p style="margin:6px 0 12px">Masan hazır. Kartını oluştur, story’nde paylaş.</p><button id="mkb">Masa kartımı oluştur</button>`;$("mkb").onclick=()=>makeCard(s)}
+  else r.innerHTML=`<b>Masa ${num}</b> · Boş<p style="margin:6px 0 0">Bu masa seni bekliyor. Takip et, yorum yaz, DM’deki <b>Takip ettim</b> düğmesine bas.</p>`;
+  if(wins.some(x=>x.d===s.d))r.innerHTML=`<b>🐱 İncir bu masaya oturdu!</b><p style="margin:6px 0 0">Masa ${num}${s.u?" · @"+s.u:""} · ${CFG.prize} kazandı.</p>`;
+  if(!fromMap)st.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function search(){
+  const v=$("q").value.trim().toLowerCase().replace(/^@/,"");
+  if(!v)return;
+  const num=/^\d+$/.test(v)?+v:0;
+  const s=num?(num>=1&&num<=CFG.total?seats[num-1]:null):(seats.find(x=>x.u&&x.u.toLowerCase()===v)||seats.find(x=>x.u&&x.u.toLowerCase().includes(v)));
+  if(s)show(s);
+  else{unsel();const r=$("res");r.style.display="block";r.innerHTML=`<b>Henüz masan yok</b><p style="margin:6px 0 0">Takip et, son gönderiye yorum yaz ve gelen DM’deki <b>Takip ettim</b> düğmesine bas. Liste her 10 dakikada güncellenir.</p>`}
+}
+$("go").onclick=search;
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter")search()});
+
+// kart
+let blob=null;
+function makeCard(s){
+  const k=document.createElement("canvas");k.width=1080;k.height=1920;
+  const x=k.getContext("2d");
+  const gr=x.createLinearGradient(0,0,0,1920);gr.addColorStop(0,"#7a0014");gr.addColorStop(1,"#d80624");
+  x.fillStyle=gr;x.fillRect(0,0,1080,1920);
+  x.textAlign="center";x.fillStyle="#ffd6dc";x.font="700 44px system-ui,sans-serif";x.fillText(CFG.name.toUpperCase(),540,260);
+  x.fillStyle="#fff";x.font="800 70px system-ui,sans-serif";x.fillText("MASA KARTI",540,420);
+  x.fillStyle="#f0b455";x.font="800 300px system-ui,sans-serif";x.fillText(String(s.d).padStart(5,"0"),540,800);
+  x.fillStyle="#fff";x.font="700 72px system-ui,sans-serif";let u="@"+s.u;if(u.length>22)u=u.slice(0,21)+"…";x.fillText(u,540,1000);
+  x.fillStyle="#97a69b";x.font="500 44px system-ui,sans-serif";x.fillText("Bu amfide senin de masan var",540,1100);
+  x.fillStyle="#ffd6dc";x.font="700 56px system-ui,sans-serif";x.fillText(CFG.handle,540,1780);
+  $("cardimg").src=k.toDataURL("image/png");k.toBlob(b=>{blob=b},"image/png");
+  $("dmsg").textContent="Kartı basılı tutup kaydet, sonra story’ne ekle ve "+CFG.handle+" etiketle.";
+  $("dlg").showModal();
+}
+$("close").onclick=()=>$("dlg").close();
+$("share").onclick=async()=>{
+  try{const f=new File([blob],"masa-karti.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],text:`Masam ${cur?cur.d:""}! ${CFG.handle}`});
+    else $("dmsg").textContent="Paylaşım bu cihazda desteklenmiyor. Kartı basılı tutup kaydet."}catch(e){}
+};
+</script>
+</body>
+</html>
