@@ -1,0 +1,30 @@
+name: diag
+# Geçici teşhis: DirectAdmin cron log'unu ve script/izinlerini FTP'den okur. Sonra silinecek.
+on:
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: FTP ile log oku
+        env:
+          AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
+          HOST: ${{ secrets.FTP_HOST }}
+          SCHEME: ${{ secrets.FTP_SCHEME || 'ftp' }}
+        run: |
+          set -uo pipefail
+          H="${HOST#*://}"; H="${H%%/*}"; H="${H//[[:space:]]/}"
+          F="$SCHEME://$H"
+          C="--connect-timeout 25 --max-time 60 --ftp-skip-pasv-ip --no-progress-meter"
+          for i in 1 2 3 4; do
+            if curl -sS $C -u "$AUTH" --list-only "$F/" >/dev/null 2>&1; then break; fi
+            echo "bağlantı denemesi $i başarısız, 20 sn"; sleep 20
+          done
+          echo "=== /home kökü (izinler + boyut) ==="
+          curl -sS $C -u "$AUTH" "$F/" || true
+          echo "=== cron-sync.log ==="
+          curl -sS $C -u "$AUTH" -r 0-4000 "$F/cron-sync.log" 2>&1 | tail -40 || echo "log yok"
+          echo "=== sync-cron.sh (ilk 300 bayt) ==="
+          curl -sS $C -u "$AUTH" -r 0-299 "$F/sync-cron.sh" 2>&1 || echo "script yok"

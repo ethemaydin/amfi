@@ -49,8 +49,11 @@ jobs:
           REQUIRE_COMMENT: ${{ secrets.REQUIRE_COMMENT || '0' }}
           AUTO_DM: ${{ secrets.AUTO_DM || '1' }}
           MAX_SEND: ${{ secrets.MAX_SEND || '60' }}
-          MAX_CALLS: ${{ secrets.MAX_CALLS || '400' }}
-          RECHECK: ${{ secrets.RECHECK || '40' }}
+          MAX_CALLS: ${{ secrets.MAX_CALLS || '150' }}
+          RECHECK: ${{ secrets.RECHECK || '12' }}
+          MAX_CONV_PAGES: ${{ secrets.MAX_CONV_PAGES || '3' }}
+          CONV_LIMIT: ${{ secrets.CONV_LIMIT || '25' }}
+          LOG_EVENTS: ${{ secrets.LOG_EVENTS || '1' }}
           WARN_CD: ${{ secrets.WARN_CD || '360' }}
           MSG_ASK: ${{ secrets.MSG_ASK }}
           MSG_BTN: ${{ secrets.MSG_BTN }}

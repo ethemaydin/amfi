@@ -20,7 +20,9 @@ if (E.COMMENT_KEYWORD) {
 }
 if (keyErr) console.error("UYARI: COMMENT_KEYWORD geçersiz regex, tüm yorumlar sayılacak:", keyErr);
 const AUTO = E.AUTO_DM !== "0" && !CSV;
-const MAX_CALLS = +E.MAX_CALLS || 400, RECHECK = +E.RECHECK || 40, MAX_SEND = +E.MAX_SEND || 60;
+const MAX_CALLS = +E.MAX_CALLS || 150, RECHECK = +E.RECHECK || 12, MAX_SEND = +E.MAX_SEND || 60;
+const MAX_CONV_PAGES = +E.MAX_CONV_PAGES || 3;         // konuşma listesinde en fazla sayfa
+const CONV_LIMIT = +E.CONV_LIMIT || 25;
 const WARN_CD = (E.WARN_CD === undefined || E.WARN_CD === "" ? 360 : +E.WARN_CD) * 60000;   // uyarı tekrar aralığı (dk)
 const DIR = E.DATA_DIR || ".";
 const NAME_OK = /^[A-Za-z0-9._]{1,30}$/;
@@ -40,6 +42,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const RATE_RX = /limit reached|rate limit|too many|Please reduce/i;
 
 async function api(path, params = {}, soft = false) {
+  if (RL.hit) { if (soft) return null; throw new RLError(RL.msg); }
   const u = new URL(path.startsWith("http") ? path : BASE + path);
   Object.entries({ ...params, access_token: token }).forEach(([k, v]) => u.searchParams.set(k, v));
   let last = null;
@@ -50,13 +53,18 @@ async function api(path, params = {}, soft = false) {
       const j = await r.json();
       if (j.error) {
         const msg = j.error.message || "";
-        if (attempt === 0 && (r.status === 429 || j.error.code === 4 || RATE_RX.test(msg))) { await sleep(2500); continue; }
+        if (r.status === 429 || j.error.code === 4 || RATE_RX.test(msg)) {
+          rlTripped(`${msg} (kod ${j.error.code || "?"})`);
+          if (soft) { if (E.VERBOSE) console.error("API hız limiti:", path, msg); return null; }
+          throw new RLError(RL.msg);
+        }
         throw new Error(fail(msg));
       }
       return j;
     } catch (e) {
+      if (e instanceof RLError) throw e;
       last = e;
-      if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1500); continue; }
+      if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1200); continue; }
       if (!soft) throw e;
       if (E.VERBOSE) console.error("API uyarı:", path, e.message);
       return null;
@@ -68,15 +76,24 @@ async function api(path, params = {}, soft = false) {
 }
 const postErrs = new Set();
 let lastPostErr = "";
+class RLError extends Error {}                       // API hız limiti: koşuyu sessizce değil, kontrollü bitir
+const RL = { hit: false, msg: "" };
+const rlTripped = (m) => { if (!RL.hit) { RL.hit = true; RL.msg = m || "rate limit"; } return true; };
+let FLUSH = null;                                    // hız limitinde kısmi durumu kaydetmek için
 async function post(path, body) {
+  if (RL.hit) return null;
   for (let attempt = 0; attempt < 2; attempt++) {
     calls++;
     try {
       const r = await fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) });
       const j = await r.json();
       if (j.error) {
-        if (attempt === 0 && (r.status === 429 || j.error.code === 4 || RATE_RX.test(j.error.message || ""))) { await sleep(3000); continue; }
         const m = `${j.error.message || "?"} (kod ${j.error.code || "?"}${j.error.error_subcode ? "/" + j.error.error_subcode : ""})`;
+        if (r.status === 429 || j.error.code === 4 || RATE_RX.test(j.error.message || "")) {
+          rlTripped(m);
+          if (postErrs.size < 5 && !postErrs.has(m)) { postErrs.add(m); console.error("GÖNDERİM HATASI:", path, "->", m); }
+          return null;
+        }
         lastPostErr = m;
         if (postErrs.size < 5 && !postErrs.has(m)) { postErrs.add(m); console.error("GÖNDERİM HATASI:", path, "->", m); }
         throw new Error(m);
@@ -84,7 +101,7 @@ async function post(path, body) {
       lastPostErr = "";
       return j;
     } catch (e) {
-      if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1500); continue; }
+      if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1200); continue; }
       if (E.VERBOSE) console.error("Gönderim uyarı:", path, e.message);
       return null;
     }
@@ -181,7 +198,8 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   }
 
   // 2) DM'ler
-  let cp = { platform: "instagram", fields: "updated_time,participants,messages.limit(10){message,created_time,from}", limit: 50 };
+  let cp = { platform: "instagram", fields: "updated_time,participants,messages.limit(10){message,created_time,from}", limit: CONV_LIMIT };
+  let convPages = 0;
   for (;;) {
     if (calls >= MAX_CALLS) break;                 // API bütçesini takip kontrollerine bırak
     const j = CSV ? null : await api(`/${FB ? PAGE_ID : "me"}/conversations`, cp, true);
@@ -196,8 +214,13 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
       }
     }
     const after = j.paging && j.paging.next && j.paging.cursors && j.paging.cursors.after;
-    const lastUp = page.length && Date.parse(page[page.length - 1].updated_time);
-    if (!after || !page.length || lastUp <= S.mSince) break;
+    if (!after || !page.length) break;
+    const stamps = page.map((cv) => Date.parse(cv.updated_time) || 0)
+      .concat(page.map((cv) => { const d = (cv.messages && cv.messages.data) || []; return d.length ? (Date.parse(d[0].created_time) || 0) : 0; }))
+      .filter(Boolean);
+    const oldest = stamps.length ? Math.min(...stamps) : 0;
+    if (oldest && oldest <= S.mSince) break;
+    if (++convPages >= MAX_CONV_PAGES) { if (E.LOG_EVENTS !== "0") console.log(`konuşma sayfası sınırı (${MAX_CONV_PAGES}) doldu`); break; }
     cp = { ...cp, after };
   }
 
@@ -214,7 +237,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   };
 
   for (const ev of events) {
-    if (!NAME_OK.test(ev.name) || banned.has(ev.name.toLowerCase())) continue;
+    if (!NAME_OK.test(ev.name) || banned.has(ev.name.toLowerCase())) { if (E.LOG_EVENTS !== "0") console.log(`atlandı @${ev.name || "?"} (geçersiz isim / kara liste)`); continue; }
     const r = rec(ev.name), k = ev.name.toLowerCase();
     const w = WANT.exec(ev.text);
     if (ev.src === "c") { if (!KEY || KEY.test(ev.text)) { r.c = true; r.cid = ev.id; r.cts = ev.ts; } }
@@ -223,6 +246,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     if (r.removed) { if (JOIN.test(ev.text) && ev.src === "d") r.removed = false; else continue; }
     r.fresh = true;
     if (w && +w[1] >= 1 && +w[1] <= TOTAL) r.want = +w[1];
+    if (E.LOG_EVENTS !== "0") console.log(`olay @${ev.name} · ${ev.src === "c" ? "yorum" : "dm"} · "${String(ev.text || "").replace(/\s+/g, " ").slice(0, 42)}"${r.want ? " · istek: masa " + r.want : ""}${r.member ? " · mevcut üye (masa " + r.desk + ")" : ""}`);
   }
   const maxC = events.filter((e) => e.src === "c").reduce((a, e) => Math.max(a, e.ts), S.cSince);
   S.cIds = [...new Set([...(maxC === S.cSince ? S.cIds || [] : []), ...events.filter((e) => e.src === "c" && e.ts === maxC).map((e) => e.id)])];
@@ -270,11 +294,13 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     }
   }
   // 5) yeni üyeler: takip doğrulaması
-  const pending = Object.keys(users).filter((k) => eligible(users[k]) && !banned.has(k) && (users[k].fresh || now - users[k].checked > 18e5))
+  const pending = Object.keys(users).filter((k) => eligible(users[k]) && !banned.has(k) && (users[k].fresh || now >= (users[k].nextAt || 0)))
     .sort((a, b) => users[a].first - users[b].first);
   for (const k of pending) {
     const r = users[k], f = await follows(r);
-    if (f !== null) r.fresh = false;               // sonuç kesin değilse sonraki çalışmada yeniden denenir
+    if (f === null) r.nextAt = Date.now() + 15 * 60000;                        // doğrulanamadı: 15 dk sonra
+    else { r.fresh = false; r.nextAt = Date.now() + 6 * 36e5; }                // kesin sonuç: 6 saat sonra
+    if (E.LOG_EVENTS !== "0") console.log(`kontrol @${r.u} · takip=${f} · üye=${!!r.member} · çağrı=${calls}`);
     if (f === true) {
       const d = r.want && !seats[r.want] ? r.want : nextFree();
       seats[d] = r.u; r.member = true; r.desk = d; r.want = 0; order.push(k);
@@ -289,7 +315,7 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   for (const k of order.slice()) if (banned.has(k) && !isWinner(k)) unseat(k);
   // 7) takibi bırakanları ele
   const old = order.filter((k) => !isWinner(k)).sort((a, b) => users[a].checked - users[b].checked).slice(0, RECHECK);
-  for (const k of old) { if ((await follows(users[k])) === false) unseat(k, "unfollowed"); if (calls >= MAX_CALLS) break; }
+  for (const k of old) { const f = await follows(users[k]); users[k].nextAt = Date.now() + 6 * 36e5; if (f === false) unseat(k, "unfollowed"); if (calls >= MAX_CALLS) break; }
 
   // 7b) masası atanmış ama onay DM'i ulaşmamış üyelere tekrar gönder
   if (AUTO) {
@@ -323,11 +349,25 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   for (let m = STEP; m <= TOTAL; m += STEP) if (order.length >= m && !winners.some((w) => w.m === m)) { const w = await draw(m, 0); if (w) winners.push(w); }
   winners.sort((a, b) => a.m - b.m);
 
-  const strip = (o) => JSON.stringify({ s: o.seats || {}, w: (o.winners || []).map((x) => ({ m: x.m, u: x.user, d: x.desk })), f: o.followers || 0, t: o.total, st: o.step });
-  const pub = { seats: {}, winners, followers: me.followers_count || 0, total: TOTAL, step: STEP, updated: new Date().toISOString() };
-  for (const d in seats) pub.seats[d] = seats[d];
-  if (D && D.seats && D.updated && strip(D) === strip(pub)) pub.updated = D.updated;   // değişiklik yoksa zaman damgasını koru (gereksiz commit olmasın)
-  writeJson(`${DIR}/data.json`, pub);
-  writeJson(`${DIR}/private.json`, S);
-  console.log(`${events.length} olay, ${order.length} üye, ${winners.length} kazanan, ${sent} mesaj${failedSend ? ` (${failedSend} başarısız)` : ""}, ${calls} API çağrısı${DRY ? " [DRY: mesaj gönderilmedi]" : ""}`);
-})().catch((e) => { console.error("HATA:", e.message); process.exit(1); });
+  const flush = () => {
+    const strip = (o) => JSON.stringify({ s: o.seats || {}, w: (o.winners || []).map((x) => ({ m: x.m, u: x.user, d: x.desk })), f: o.followers || 0, t: o.total, st: o.step });
+    const pub = { seats: {}, winners, followers: me.followers_count || 0, total: TOTAL, step: STEP, updated: new Date().toISOString() };
+    for (const d in seats) pub.seats[d] = seats[d];
+    if (D && D.seats && D.updated && strip(D) === strip(pub)) pub.updated = D.updated;   // değişiklik yoksa zaman damgasını koru
+    writeJson(`${DIR}/data.json`, pub);
+    writeJson(`${DIR}/private.json`, S);
+  };
+  FLUSH = flush;
+  flush();
+  console.log(`${events.length} olay, ${order.length} üye, ${winners.length} kazanan, ${sent} mesaj${failedSend ? ` (${failedSend} başarısız)` : ""}, ${calls} API çağrısı${DRY ? " [DRY: mesaj gönderilmedi]" : ""}${RL.hit ? " | HIZ LİMİTİ: kalan işler sonraki koşuya" : ""}`);
+})().catch((e) => {
+  if (e instanceof RLError) {
+    console.error("UYARI: API hız limiti (kod 4) — koşu erken bitirildi:", e.message);
+    if (FLUSH) { try { FLUSH(); console.error("Kısmi durum kaydedildi."); } catch (_) {} }
+    const sm = process.env.GITHUB_STEP_SUMMARY;
+    if (sm) { try { require("fs").appendFileSync(sm, `\n> ⚠️ API hız limiti: ${e.message} — kalan işler sonraki koşuya bırakıldı.\n`); } catch (_) {} }
+    process.exit(0);
+  }
+  console.error("HATA:", e.message);
+  process.exit(1);
+});

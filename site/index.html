@@ -115,18 +115,19 @@ const CFG={
   total:50000,
   step:10000,
   prize:"1 aylık ücretsiz Speaking Club",
-  dataUrl:"https://raw.githubusercontent.com/ethemaydin/amfi/data/data.json",   // ana kaynak: workflow her 10 dk günceller
-  dataUrlFallback:"data.json"                                                  // yedek: siteye elle yüklenen kopya
+  dataUrl:"https://raw.githubusercontent.com/ethemaydin/amfi/data/data.json",   // ana kaynak: workflow her koşuda günceller
+  dataUrlFallback:"https://cdn.jsdelivr.net/gh/ethemaydin/amfi@data/data.json", // yedek: jsDelivr CDN
+  dataUrlLocal:"data.json"                                                      // son çare: sunucudaki kopya
 };
 // Kullanıcı adları (@ olmadan, virgülle)
 let DATA={seats:{},winners:[],followers:0,updated:""};
 let dataLoaded=false,DSrc=null;
 const bucket=()=>Math.floor(Date.now()/3e4);   // 30 sn'lik önbellek anahtarı: veri neredeyse anında tazelenir
-for(const src of [CFG.dataUrl,CFG.dataUrlFallback]){
+for(const src of [CFG.dataUrl,CFG.dataUrlFallback,CFG.dataUrlLocal]){
   if(dataLoaded||!src)continue;
   try{const x=new XMLHttpRequest();x.open("GET",src+"?t="+bucket(),false);x.send();
     if(x.status===200){const d=JSON.parse(x.responseText);
-      if(d&&d.seats&&typeof d.seats==="object"){
+      if(d&&d.seats&&typeof d.seats==="object"&&(d.updated||Object.keys(d.seats).length)){
         DATA={seats:{},winners:d.winners||[],followers:d.followers||0,updated:d.updated||"",sig:Object.keys(d.seats).length+"|"+(d.winners||[]).length};
         for(const k in d.seats){if(/^[A-Za-z0-9._]{1,30}$/.test(d.seats[k]))DATA.seats[k]=d.seats[k]}
         dataLoaded=true;DSrc=src;
