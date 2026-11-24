@@ -6,23 +6,32 @@ concurrency: sync
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       FTP: ${{ secrets.FTP_SCHEME || 'ftp' }}://${{ secrets.FTP_HOST }}
       AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
       OPTS: ${{ secrets.FTP_CURL_OPTS }}
       WEB: ${{ secrets.FTP_WEB_DIR }}
       PRIV: ${{ secrets.FTP_PRIVATE_DIR }}
+      CURL: --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - name: Durumu sunucudan indir
         run: |
-          curl -sS $OPTS -u "$AUTH" "$FTP$PRIV/private.json" -o private.json || true
-          curl -sS $OPTS -u "$AUTH" "$FTP$WEB/data.json" -o data.json || true
+          get() {
+            c=0; curl -sS $CURL $OPTS -u "$AUTH" "$FTP$1" -o "$2" || c=$?
+            if [ $c -eq 0 ]; then return 0
+            elif [ $c -eq 78 ]; then rm -f "$2"; echo "$2 sunucuda yok (ilk çalışma)"; return 0
+            else echo "FTP indirme hatası (kod $c). Durduruldu; durum kaybolmasın diye devam edilmiyor."; return 1; fi
+          }
+          get "$PRIV/private.json" private.json
+          get "$WEB/data.json" data.json
           [ -s private.json ] || rm -f private.json
-          [ -s data.json ] || rm -f data.json
+          if [ -s data.json ] && [ ! -f private.json ] && grep -q '"seats":{"' data.json; then
+            echo "UYARI: data.json dolu ama private.json bulunamadı. Durum kaybı olmaması için durduruldu."; exit 1
+          fi
       - name: Senkronize et
         run: node sync.js
         env:
@@ -34,5 +43,5 @@ jobs:
           SALT: ${{ secrets.SALT }}
       - name: Sunucuya yükle
         run: |
-          curl -sS $OPTS -u "$AUTH" --ftp-create-dirs -T private.json "$FTP$PRIV/private.json"
-          curl -sS $OPTS -u "$AUTH" -T data.json "$FTP$WEB/data.json"
+          curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T private.json "$FTP$PRIV/private.json"
+          curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T data.json "$FTP$WEB/data.json"
