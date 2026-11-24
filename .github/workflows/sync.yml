@@ -50,6 +50,7 @@ jobs:
           MAX_SEND: ${{ secrets.MAX_SEND || '60' }}
           MAX_CALLS: ${{ secrets.MAX_CALLS || '400' }}
           RECHECK: ${{ secrets.RECHECK || '40' }}
+          WARN_CD: ${{ secrets.WARN_CD || '360' }}
           MSG_ASK: ${{ secrets.MSG_ASK }}
           MSG_BTN: ${{ secrets.MSG_BTN }}
           MSG_OK: ${{ secrets.MSG_OK }}

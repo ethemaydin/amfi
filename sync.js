@@ -21,6 +21,7 @@ if (E.COMMENT_KEYWORD) {
 if (keyErr) console.error("UYARI: COMMENT_KEYWORD geçersiz regex, tüm yorumlar sayılacak:", keyErr);
 const AUTO = E.AUTO_DM !== "0" && !CSV;
 const MAX_CALLS = +E.MAX_CALLS || 400, RECHECK = +E.RECHECK || 40, MAX_SEND = +E.MAX_SEND || 60;
+const WARN_CD = (E.WARN_CD === undefined || E.WARN_CD === "" ? 360 : +E.WARN_CD) * 60000;   // uyarı tekrar aralığı (dk)
 const DIR = E.DATA_DIR || ".";
 const NAME_OK = /^[A-Za-z0-9._]{1,30}$/;
 const WANT = /masa\s*#?\s*(\d{1,5})/i, DEL = /kald[ıi]r|\bsil\b/i, JOIN = /kat[ıi]l/i;
@@ -265,8 +266,8 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
     if (f === true) {
       const d = r.want && !seats[r.want] ? r.want : nextFree();
       seats[d] = r.u; r.member = true; r.desk = d; r.want = 0; order.push(k);
-      if (AUTO && r.igsid !== "csv") await dm({ id: r.igsid }, T_OK(d));
-    } else if (f === false && AUTO && now - (r.warn || 0) > 6 * 36e5) { r.warn = now; await dm({ id: r.igsid }, T_NO, T_BTN); }
+      if (AUTO && r.igsid !== "csv") { if (await dm({ id: r.igsid }, T_OK(d))) r.ok = true; }
+    } else if (f === false && AUTO && now - (r.warn || 0) > WARN_CD) { r.warn = now; await dm({ id: r.igsid }, T_NO, T_BTN); }
     if (calls >= MAX_CALLS) break;
   }
   // 6) banlılar
@@ -274,6 +275,16 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   // 7) takibi bırakanları ele
   const old = order.filter((k) => !isWinner(k)).sort((a, b) => users[a].checked - users[b].checked).slice(0, RECHECK);
   for (const k of old) { if ((await follows(users[k])) === false) unseat(k, "unfollowed"); if (calls >= MAX_CALLS) break; }
+
+  // 7b) masası atanmış ama onay DM'i ulaşmamış üyelere tekrar gönder
+  if (AUTO) {
+    for (const k of order.slice()) {
+      const r = users[k];
+      if (r.ok || !r.igsid || r.igsid === "csv") continue;
+      if (sent >= MAX_SEND || calls >= MAX_CALLS) break;
+      if (await dm({ id: r.igsid }, T_OK(r.desk))) r.ok = true;
+    }
+  }
 
   // 8) İncir çekilişi (kazanan canlı kontrol edilir)
   const draw = async (m, attempt) => {
