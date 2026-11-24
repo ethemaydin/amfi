@@ -29,6 +29,19 @@ jobs:
           echo "FTP=$SCHEME://$h" >> "$GITHUB_ENV"
           echo "WEB=$w" >> "$GITHUB_ENV"
           echo "PRIV=$p" >> "$GITHUB_ENV"
+      - name: Klasörleri hazırla ve doğrula
+        run: |
+          curl -sS $CURL $OPTS -u "$AUTH" -Q "-MKD $PRIV" "$FTP/" -o /dev/null || true
+          if ! curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP$WEB/" -o /dev/null; then
+            echo "HATA: FTP_WEB_DIR ($WEB) sunucuda bulunamadı. FTP girişinde görünen ana klasörler:"
+            curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP/" || true
+            exit 1
+          fi
+          if ! curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP$PRIV/" -o /dev/null; then
+            echo "HATA: FTP_PRIVATE_DIR ($PRIV) oluşturulamadı. Ana klasörler:"
+            curl -sS $CURL $OPTS -u "$AUTH" --list-only "$FTP/" || true
+            exit 1
+          fi
       - name: Durumu sunucudan indir
         run: |
           get() {
