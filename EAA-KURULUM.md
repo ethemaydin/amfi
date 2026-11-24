@@ -45,7 +45,17 @@ Akış iki kapılıdır ve **takip şartı her iki kapıda da zorunludur**:
 - `site/` klasörü repoda durur. `site/**` içinde bir değişiklik push edildiğinde **`deploy-site`** workflow'u dosyaları FTP ile yükler (6 kez tekrar dener). Elle yükleme gerekmez.
 - Site verisi: `https://raw.githubusercontent.com/ethemaydin/amfi/data/data.json` (ana kaynak) + aynı klasördeki `data.json` (yedek). Sayfa 30 sn'de bir yeni veri var mı diye bakar ve değiştiyse kendini yeniler.
 
-### Gecikme beklentisi
+### Zamanlayıcı (tetikleyici)
+- **Ana:** Cloudflare Worker + Cron Trigger `*/5 * * * *` → GitHub `dispatches` API'si (`204` = tetiklendi). Ücretsiz plan: 100.000 istek/gün, 5 cron/hesap; bu kullanım ~288 istek/gün.
+- **Yedek:** DirectAdmin cron saati başına 1 kez (`0 * * * *`) — Worker durursa sistem kör kalmasın. **İkisini de 5 dakikada çalıştırmayın** (API kotasını ikiye katlar).
+
+### Kota koruması (kodda)
+- `CALLS_HOUR=120`: son 60 dakikadaki API çağrısı 120'yi geçerse koşu başlamaz.
+- `#4` hız limiti görülünce koşu **anında** durur, 10 dk (`RL_COOLDOWN`) bekler, durum kaydedilir.
+- `MAX_PENDING=3` · `RECHECK=3` / 30 dk · `MEDIA_LIMIT=3` · `MAX_CONV_PAGES=1` → koşu başına ~10 çağrı.
+
+### Takip doğrulaması ve "consent" (#230)
+`is_user_follow_business` yalnızca kişi **son 24 saat içinde** mesaj attıysa okunabilir. Daha eski mesajlarda API `(#230) User consent is required` döner. Sistem bu durumda kullanıcıyı `noConsent` olarak işaretler, 24 saat erteler ve uygun olduğunda **yoruma özel yanıtla** "tekrar yaz" daveti gönderir. Kişi tekrar yazdığında takibi doğrulanıp masası atanır.
 `sync` 5 dakikada bir çalışır (GitHub'ın izin verdiği en sık aralık). Kullanıcı DM/yorum attığında masası sitede **ortalama 2-5 dakikada**, en kötü ~7 dakikada görünür. Gerçek "anlık" istenirse Meta webhook'u + küçük bir sunucu (Cloudflare Worker) gerekir; mevcut kurulum buna da uygundur.
 
 ### Mesaj kuralları (Meta)
