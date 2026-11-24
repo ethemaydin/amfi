@@ -56,7 +56,8 @@ jobs:
           for host in $HOSTS; do
             for sch in "$SCHEME" ftp; do
               if curl -sS $CURL $OPTS -u "$AUTH" --list-only "$sch://$host/" > /dev/null 2>&1; then
-                echo "FTP=$sch://$host" >> "$GITHUB_ENV"; ok=1; break 2
+                FTPV="$sch://$host"
+                echo "FTP=$FTPV" >> "$GITHUB_ENV"; ok=1; break 2
               fi
             done
           done
@@ -64,7 +65,7 @@ jobs:
             echo "::error::FTP'ye bağlanılamadı. FTP_HOST Cloudflare'e bakıyorsa FTP çalışmaz: ya FTP_HOST'u sunucu IP'si yap ya da Cloudflare'de ftp kaydını proxy'siz (gri bulut) yap."
             exit 1
           fi
-          echo "FTP bağlantısı tamam: $FTP"
+          echo "FTP bağlantısı tamam: ${FTPV:-?}"
 
       - name: Klasörleri hazırla ve doğrula
         env:
