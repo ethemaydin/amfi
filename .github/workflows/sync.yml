@@ -1,0 +1,38 @@
+name: sync
+on:
+  schedule: [{ cron: "*/10 * * * *" }]
+  workflow_dispatch:
+concurrency: sync
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      FTP: ${{ secrets.FTP_SCHEME || 'ftp' }}://${{ secrets.FTP_HOST }}
+      AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
+      OPTS: ${{ secrets.FTP_CURL_OPTS }}
+      WEB: ${{ secrets.FTP_WEB_DIR }}
+      PRIV: ${{ secrets.FTP_PRIVATE_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Durumu sunucudan indir
+        run: |
+          curl -sS $OPTS -u "$AUTH" "$FTP$PRIV/private.json" -o private.json || true
+          curl -sS $OPTS -u "$AUTH" "$FTP$WEB/data.json" -o data.json || true
+          [ -s private.json ] || rm -f private.json
+          [ -s data.json ] || rm -f data.json
+      - name: Senkronize et
+        run: node sync.js
+        env:
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          VERIFIED_CSV_URL: ${{ secrets.VERIFIED_CSV_URL }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          COMMENT_KEYWORD: ${{ secrets.COMMENT_KEYWORD }}
+          SALT: ${{ secrets.SALT }}
+      - name: Sunucuya yükle
+        run: |
+          curl -sS $OPTS -u "$AUTH" --ftp-create-dirs -T private.json "$FTP$PRIV/private.json"
+          curl -sS $OPTS -u "$AUTH" -T data.json "$FTP$WEB/data.json"
