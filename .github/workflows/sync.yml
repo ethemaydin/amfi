@@ -3,45 +3,32 @@ on:
   schedule: [{ cron: "*/10 * * * *" }]
   workflow_dispatch:
 concurrency: sync
+permissions: { contents: write }
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SCHEME: ${{ secrets.FTP_SCHEME || 'ftp' }}
-      HOSTRAW: ${{ secrets.FTP_HOST }}
-      AUTH: ${{ secrets.FTP_USER }}:${{ secrets.FTP_PASS }}
-      OPTS: ${{ secrets.FTP_CURL_OPTS }}
-      WEBRAW: ${{ secrets.FTP_WEB_DIR }}
-      PRIVRAW: ${{ secrets.FTP_PRIVATE_DIR }}
-      CURL: --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 5 --ftp-skip-pasv-ip
+      GH_TOKEN: ${{ github.token }}
+      STATE_KEY: ${{ secrets.STATE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-      - name: Bağlantı ayarlarını düzenle
+      - name: Durumu al
         run: |
-          h="${HOSTRAW#*://}"; h="${h%%/*}"; h="${h//[[:space:]]/}"
-          w="${WEBRAW//[[:space:]]/}"; p="${PRIVRAW//[[:space:]]/}"
-          w="/${w#/}"; w="${w%/}"; p="/${p#/}"; p="${p%/}"
-          [ -n "$h" ] || { echo "FTP_HOST boş"; exit 1; }
-          echo "FTP=$SCHEME://$h" >> "$GITHUB_ENV"
-          echo "WEB=$w" >> "$GITHUB_ENV"
-          echo "PRIV=$p" >> "$GITHUB_ENV"
-      - name: Durumu sunucudan indir
-        run: |
-          get() {
-            c=0; curl -sS $CURL $OPTS -u "$AUTH" "$FTP$1" -o "$2" || c=$?
-            if [ $c -eq 0 ]; then return 0
-            elif [ $c -eq 78 ]; then rm -f "$2"; echo "$2 sunucuda yok (ilk çalışma)"; return 0
-            else echo "FTP indirme hatası (kod $c). Durduruldu; durum kaybolmasın diye devam edilmiyor."; return 1; fi
-          }
-          get "$PRIV/private.json" private.json
-          get "$WEB/data.json" data.json
-          [ -s private.json ] || rm -f private.json
-          if [ -s data.json ] && [ ! -f private.json ] && grep -q '"seats":{"' data.json; then
-            echo "UYARI: data.json dolu ama private.json bulunamadı. Durum kaybı olmaması için durduruldu."; exit 1
+          REMOTE="${REMOTE:-https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git}"
+          rm -rf state
+          if git ls-remote --exit-code --heads "$REMOTE" data >/dev/null 2>&1; then
+            git clone -q --depth 1 --branch data "$REMOTE" state
+          else
+            mkdir state; git -C state init -q -b data; git -C state remote add origin "$REMOTE"
           fi
+          if [ -s state/data.json ] && grep -q '"seats":{"' state/data.json && [ ! -f state/private.enc ]; then
+            echo "UYARI: data.json dolu ama private.enc yok. Durum kaybı olmaması için durduruldu."; exit 1
+          fi
+          if [ -f state/data.json ]; then cp state/data.json data.json; fi
+          if [ -f state/private.enc ]; then node state.js dec; fi
       - name: Senkronize et
         run: node sync.js
         env:
@@ -51,15 +38,15 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           COMMENT_KEYWORD: ${{ secrets.COMMENT_KEYWORD }}
           SALT: ${{ secrets.SALT }}
-      - name: Sunucuya yükle
+      - name: Durumu kaydet
         run: |
-          curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T private.json "$FTP$PRIV/private.json"
-          curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T data.json "$FTP$WEB/data.json"
-      - name: Bağlantı tanısı (yalnızca hata olursa)
-        if: failure()
-        run: |
-          H="${FTP#*://}"
-          for p in 21 22 990; do
-            if timeout 8 bash -c "exec 3<>/dev/tcp/$H/$p" 2>/dev/null; then echo "port $p: ACIK"; else echo "port $p: KAPALI veya erisilemiyor"; fi
-          done
-          curl -v $OPTS --connect-timeout 15 --max-time 30 --ftp-skip-pasv-ip -u "$AUTH" "$FTP/" --list-only 2>&1 | grep -vi "pass" | head -40 || true
+          REMOTE="${REMOTE:-https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git}"
+          node state.js enc
+          cp data.json state/data.json
+          cd state
+          git config user.name "amfi-bot"; git config user.email "bot@users.noreply.github.com"
+          git checkout -q --orphan tmp
+          git add -A
+          git commit -q -m "sync $(date -u +%FT%TZ)"
+          git branch -M data
+          git push -q -f "$REMOTE" data
