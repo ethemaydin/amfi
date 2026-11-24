@@ -65,6 +65,7 @@ async function api(path, params = {}, soft = false) {
   if (E.VERBOSE) console.error("API uyarı:", path, last && last.message);
   return null;
 }
+const postErrs = new Set();
 async function post(path, body) {
   for (let attempt = 0; attempt < 2; attempt++) {
     calls++;
@@ -73,7 +74,9 @@ async function post(path, body) {
       const j = await r.json();
       if (j.error) {
         if (attempt === 0 && (r.status === 429 || j.error.code === 4 || RATE_RX.test(j.error.message || ""))) { await sleep(3000); continue; }
-        throw new Error(j.error.message);
+        const m = `${j.error.message || "?"} (kod ${j.error.code || "?"}${j.error.error_subcode ? "/" + j.error.error_subcode : ""})`;
+        if (postErrs.size < 5 && !postErrs.has(m)) { postErrs.add(m); console.error("GÖNDERİM HATASI:", path, "->", m); }
+        throw new Error(m);
       }
       return j;
     } catch (e) {
