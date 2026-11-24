@@ -50,6 +50,45 @@ async function post(path, body) {
 function h32(str){let h1=1779033703,h2=3144134277,h3=1013904242,h4=2773480762;for(let i=0,k;i<str.length;i++){k=str.charCodeAt(i);h1=h2^Math.imul(h1^k,597399067);h2=h3^Math.imul(h2^k,2869860233);h3=h4^Math.imul(h3^k,951274213);h4=h1^Math.imul(h4^k,2716044179)}h1=Math.imul(h3^(h1>>>18),597399067);h2=Math.imul(h4^(h2>>>22),2869860233);h3=Math.imul(h1^(h3>>>17),951274213);h4=Math.imul(h2^(h4>>>19),2716044179);return(h1^h2^h3^h4)>>>0}
 const readJson = (f, d) => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : d);
 const writeJson = (f, o) => { fs.writeFileSync(f + ".tmp", JSON.stringify(o)); fs.renameSync(f + ".tmp", f); };
+let IG_ID = (E.IG_USER_ID || "").trim(), PAGE_ID = (E.PAGE_ID || "").trim();
+async function discover() {
+  if (!token) return {};
+  if (!FB) {
+    const me = (await api("/me", { fields: "user_id,username,followers_count" }, !!CSV)) || {};
+    IG_ID = String(me.user_id || me.id || "");
+    PAGE_ID = IG_ID;
+    return me;
+  }
+
+  const f = "id,name,instagram_business_account{id,username,followers_count}";
+  const acc = await api("/me/accounts", { fields: f + ",access_token" }, true);
+  let pg = (acc && acc.data || []).find(
+    (x) => x.instagram_business_account &&
+      (!IG_ID || String(x.instagram_business_account.id) === IG_ID) &&
+      (!PAGE_ID || String(x.id) === PAGE_ID)
+  );
+
+  if (pg) {
+    if (pg.access_token) token = pg.access_token;
+    PAGE_ID = String(pg.id);
+    IG_ID = String(pg.instagram_business_account.id);
+    return {
+      username: pg.instagram_business_account.username,
+      followers_count: pg.instagram_business_account.followers_count
+    };
+  }
+
+  // /me/accounts boş dönerse bilinen IG_USER_ID üzerinden doğrudan sorgula
+  if (IG_ID) {
+    const igInfo = await api(`/${IG_ID}`, { fields: "id,username,followers_count" }, true);
+    if (igInfo && igInfo.id) {
+      PAGE_ID = PAGE_ID || String(igInfo.id);
+      return igInfo;
+    }
+  }
+
+  throw new Error("Bu token'a bağlı, Instagram'a bağlanmış bir Facebook Sayfası veya geçerli IG_USER_ID bulunamadı.");
+}
 
 let IG_ID = E.IG_USER_ID || "", PAGE_ID = E.PAGE_ID || "";
 async function discover() {          // hesap kimliklerini bul; kullanıcı token'ı verildiyse sayfa token'ına geç
