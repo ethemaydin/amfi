@@ -14,7 +14,7 @@ jobs:
       OPTS: ${{ secrets.FTP_CURL_OPTS }}
       WEBRAW: ${{ secrets.FTP_WEB_DIR }}
       PRIVRAW: ${{ secrets.FTP_PRIVATE_DIR }}
-      CURL: --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 5
+      CURL: --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 5 --ftp-skip-pasv-ip
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,3 +55,11 @@ jobs:
         run: |
           curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T private.json "$FTP$PRIV/private.json"
           curl -sS $CURL $OPTS -u "$AUTH" --ftp-create-dirs -T data.json "$FTP$WEB/data.json"
+      - name: Bağlantı tanısı (yalnızca hata olursa)
+        if: failure()
+        run: |
+          H="${FTP#*://}"
+          for p in 21 22 990; do
+            if timeout 8 bash -c "exec 3<>/dev/tcp/$H/$p" 2>/dev/null; then echo "port $p: ACIK"; else echo "port $p: KAPALI veya erisilemiyor"; fi
+          done
+          curl -v $OPTS --connect-timeout 15 --max-time 30 --ftp-skip-pasv-ip -u "$AUTH" "$FTP/" --list-only 2>&1 | grep -vi "pass" | head -40 || true
