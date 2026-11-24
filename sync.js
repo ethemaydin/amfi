@@ -66,10 +66,12 @@ async function api(path, params = {}, soft = false) {
         }
         throw new Error(fail(msg));
       }
+      lastApiErr = "";
       return j;
     } catch (e) {
       if (e instanceof RLError) throw e;
       last = e;
+      lastApiErr = e.message || "";
       if (attempt === 0 && /fetch failed|network|ECONN|ETIMEDOUT|socket/i.test(e.message)) { await sleep(1200); continue; }
       if (!soft) throw e;
       if (E.VERBOSE) console.error("API uyarı:", path, e.message);
@@ -81,7 +83,7 @@ async function api(path, params = {}, soft = false) {
   return null;
 }
 const postErrs = new Set();
-let lastPostErr = "";
+let lastPostErr = "", lastApiErr = "";
 class RLError extends Error {}                       // API hız limiti: koşuyu sessizce değil, kontrollü bitir
 const RL = { hit: false, msg: "", path: "" };
 const rlTripped = (m, path) => {
@@ -282,6 +284,18 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
       }
     }
   }
+  // 3b) takibi doğrulanamayanlara (consent #230) "tekrar yaz" daveti — kişi başı günde 1 kez
+  if (AUTO) {
+    for (const k of Object.keys(users)) {
+      const r = users[k];
+      if (!r.noConsent || r.member || r.removed || banned.has(k) || !canReply(r)) continue;
+      if (now - (r.asked || 0) < 24 * 36e5) continue;
+      if (sent >= MAX_SEND || RL.hit || calls >= MAX_CALLS) break;
+      r.asked = now;
+      if (await dm({ comment_id: r.cid }, T_ASK, T_BTN)) r.replied = true;
+      if (E.LOG_EVENTS !== "0") console.log(`tekrar davet @${r.u}`);
+    }
+  }
 
   const follows = async (r) => {
     if (CSV) return true;                     // doğrulamayı dış araç yaptı
@@ -314,12 +328,18 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   }
   // 5) yeni üyeler: takip doğrulaması
   const pending = Object.keys(users).filter((k) => eligible(users[k]) && !banned.has(k) && (users[k].fresh || now >= (users[k].nextAt || 0)))
-    .sort((a, b) => (users[b].fresh ? 1 : 0) - (users[a].fresh ? 1 : 0) || (users[b].want ? 1 : 0) - (users[a].want ? 1 : 0) || users[a].first - users[b].first)
+    .sort((a, b) => (users[b].fresh ? 1 : 0) - (users[a].fresh ? 1 : 0) || (users[b].lastd || 0) - (users[a].lastd || 0) || (users[b].want ? 1 : 0) - (users[a].want ? 1 : 0) || users[a].first - users[b].first)
     .slice(0, MAX_PENDING);
   for (const k of pending) {
     const r = users[k], f = await follows(r);
-    if (f === null) { r.nextAt = Date.now() + 30 * 60000; if (RL.hit) { console.log("hız limiti: kalan kontroller sonraki koşuya bırakıldı"); break; } }
-    else { r.fresh = false; r.nextAt = Date.now() + 6 * 36e5; }                // kesin sonuç: 6 saat sonra
+    if (f === null) {
+      if (/consent/i.test(lastApiErr)) {                                   // #230: kişi tekrar mesaj atmalı
+        r.noConsent = true; r.nextAt = Date.now() + 24 * 3600e3;
+        if (E.LOG_EVENTS !== "0") console.log(`onay yok @${r.u} · yeniden mesaj atması gerekiyor`);
+      } else r.nextAt = Date.now() + 30 * 60000;
+      if (RL.hit) { console.log("hız limiti: kalan kontroller sonraki koşuya bırakıldı"); break; }
+    }
+    else { r.fresh = false; r.noConsent = false; r.nextAt = Date.now() + 6 * 36e5; }   // kesin sonuç: 6 saat sonra
     if (E.LOG_EVENTS !== "0") console.log(`kontrol @${r.u} · takip=${f} · üye=${!!r.member} · çağrı=${calls}`);
     if (f === true) {
       const d = r.want && !seats[r.want] ? r.want : nextFree();
