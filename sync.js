@@ -90,7 +90,7 @@ async function discover() {
   throw new Error("Bu token'a bağlı, Instagram'a bağlanmış bir Facebook Sayfası veya geçerli IG_USER_ID bulunamadı.");
 }
 
-let IG_ID = E.IG_USER_ID || "", PAGE_ID = E.PAGE_ID || "";
+let IG_ID = (E.IG_USER_ID || "").trim(), PAGE_ID = (E.PAGE_ID || "").trim();
 async function discover() {          // hesap kimliklerini bul; kullanıcı token'ı verildiyse sayfa token'ına geç
   if (!token) return {};
   if (!FB) {
