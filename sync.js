@@ -293,8 +293,10 @@ async function discover() {          // hesap kimliklerini bul; kullanıcı toke
   for (let m = STEP; m <= TOTAL; m += STEP) if (order.length >= m && !winners.some((w) => w.m === m)) { const w = await draw(m, 0); if (w) winners.push(w); }
   winners.sort((a, b) => a.m - b.m);
 
+  const strip = (o) => JSON.stringify({ s: o.seats || {}, w: (o.winners || []).map((x) => ({ m: x.m, u: x.user, d: x.desk })), f: o.followers || 0, t: o.total, st: o.step });
   const pub = { seats: {}, winners, followers: me.followers_count || 0, total: TOTAL, step: STEP, updated: new Date().toISOString() };
   for (const d in seats) pub.seats[d] = seats[d];
+  if (D && D.seats && D.updated && strip(D) === strip(pub)) pub.updated = D.updated;   // değişiklik yoksa zaman damgasını koru (gereksiz commit olmasın)
   writeJson(`${DIR}/data.json`, pub);
   writeJson(`${DIR}/private.json`, S);
   console.log(`${events.length} olay, ${order.length} üye, ${winners.length} kazanan, ${sent} mesaj${failedSend ? ` (${failedSend} başarısız)` : ""}, ${calls} API çağrısı${DRY ? " [DRY: mesaj gönderilmedi]" : ""}`);

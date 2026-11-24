@@ -8,8 +8,16 @@ cp data.json state/data.json
 cd state
 git config user.name "amfi-bot"
 git config user.email "bot@users.noreply.github.com"
+LAST=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+NOW=$(date +%s)
 git add -A
-if git diff --cached --quiet; then echo "Değişiklik yok, push atlandı."; exit 0; fi
+if git diff --cached --quiet; then
+  if [ $((NOW - LAST)) -lt 3300 ]; then echo "Değişiklik yok, push atlandı."; exit 0; fi
+  date -u +%FT%TZ > heartbeat.txt; git add heartbeat.txt   # repo aktivitesi (zamanlanmış iş kapanmasın)
+fi
+git checkout -q --orphan tmp
+git add -A
 git commit -q -m "sync $(date -u +%FT%TZ)"
-git push -q -f "$REMOTE" HEAD:data
+git branch -M data
+git push -q -f "$REMOTE" data
 echo "Durum kaydedildi."
